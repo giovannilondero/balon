@@ -60,21 +60,36 @@ export function playGoal() {
   gain.gain.exponentialRampToValueAtTime(0.001, t + 2.4);
   src.connect(filter).connect(gain).connect(ctx.destination);
   src.start(t);
-  // Fischietto.
-  const osc = ctx.createOscillator();
-  const og = ctx.createGain();
+  whistle(ctx, t, 0.5);
+}
+
+/** Fischi brevi in sequenza; l'ultimo è lungo (1 = inizio, 3 = fine partita). */
+export function playWhistle(count: number) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  for (let i = 0; i < count; i++) {
+    const last = i === count - 1;
+    whistle(ctx, t + i * 0.32, last && count > 1 ? 0.7 : 0.22);
+  }
+}
+
+function whistle(ac: AudioContext, t: number, duration: number) {
+  const osc = ac.createOscillator();
+  const gain = ac.createGain();
   osc.frequency.setValueAtTime(2600, t);
-  const lfo = ctx.createOscillator();
-  const lfoGain = ctx.createGain();
+  // Il "trillo" del fischietto: vibrato veloce sulla frequenza.
+  const lfo = ac.createOscillator();
+  const lfoGain = ac.createGain();
   lfo.frequency.value = 30;
   lfoGain.gain.value = 120;
   lfo.connect(lfoGain).connect(osc.frequency);
-  og.gain.setValueAtTime(0.08, t);
-  og.gain.setValueAtTime(0.08, t + 0.5);
-  og.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
-  osc.connect(og).connect(ctx.destination);
+  gain.gain.setValueAtTime(0.001, t);
+  gain.gain.exponentialRampToValueAtTime(0.08, t + 0.02);
+  gain.gain.setValueAtTime(0.08, t + duration - 0.08);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+  osc.connect(gain).connect(ac.destination);
   osc.start(t);
   lfo.start(t);
-  osc.stop(t + 0.6);
-  lfo.stop(t + 0.6);
+  osc.stop(t + duration);
+  lfo.stop(t + duration);
 }

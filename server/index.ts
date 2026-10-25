@@ -1,43 +1,53 @@
 import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  addPlayer,
-  createState,
-  InputBit,
-  removePlayer,
-  step,
-  switchTeam,
-  TICK_RATE,
-  type GameEvent,
-} from "../shared/game.ts";
-import type { ClientMessage, ServerMessage, Snapshot } from "../shared/protocol.ts";
+import { MATCH_MINUTES, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
+import type { ClientMessage, RoomKind, ServerMessage } from "../shared/protocol.ts";
+import { networkOf, type NetworkId } from "./network.ts";
+import { newCode, Room } from "./rooms.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
+/** Dietro un reverse proxy l'IP reale arriva in X-Forwarded-For. */
+const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const DIST = join(import.meta.dir, "../dist");
-const ALL_INPUTS = Object.values(InputBit).reduce((a, b) => a | b, 0);
+/** Quanto teniamo il posto a chi si disconnette (app in background, rete ballerina). */
+const GRACE_MS = 20_000;
 
-type Socket = ServerWebSocket<{ id: string; joined: boolean }>;
+interface Session {
+  id: string;
+  token: string;
+  ws: Socket | null;
+  room: Room | null;
+  graceTimer: Timer | null;
+}
 
-const state = createState();
-let pendingEvents: GameEvent[] = [];
+interface SocketData {
+  network: NetworkId;
+  session: Session | null;
+}
 
-const server = Bun.serve<{ id: string; joined: boolean }>({
+type Socket = ServerWebSocket<SocketData>;
+
+const rooms = new Map<string, Room>();
+const sessions = new Map<string, Session>();
+
+const server = Bun.serve<SocketData>({
   port: PORT,
   fetch(req, server) {
     const url = new URL(req.url);
     if (url.pathname === "/ws") {
-      const id = crypto.randomUUID().slice(0, 8);
-      if (server.upgrade(req, { data: { id, joined: false } })) return;
+      const forwarded = TRUST_PROXY ? req.headers.get("x-forwarded-for")?.split(",")[0].trim() : undefined;
+      const network = networkOf(forwarded ?? server.requestIP(req)?.address);
+      if (server.upgrade(req, { data: { network, session: null } })) return;
       return new Response("Upgrade failed", { status: 400 });
     }
-    // In produzione (`bun run build && bun start`) serve anche il client.
+    // In produzione (`pnpm build && pnpm start`) serve anche il client.
     if (existsSync(DIST)) {
       const path = url.pathname === "/" ? "/index.html" : url.pathname;
       const file = Bun.file(join(DIST, path));
       return file.exists().then((ok) => new Response(ok ? file : Bun.file(join(DIST, "index.html"))));
     }
-    return new Response("Client non buildato: usa `bun run dev` e apri la porta di Vite.", { status: 404 });
+    return new Response("Client non buildato: usa `pnpm dev` e apri la porta di Vite.", { status: 404 });
   },
   websocket: {
     message(ws: Socket, raw) {
@@ -47,50 +57,159 @@ const server = Bun.serve<{ id: string; joined: boolean }>({
       } catch {
         return;
       }
-      if (msg.t === "join" && !ws.data.joined) {
-        const name = String(msg.name ?? "").trim().slice(0, 16) || "Giocatore";
-        addPlayer(state, ws.data.id, name);
-        ws.data.joined = true;
-        ws.subscribe("game");
-        send(ws, { t: "welcome", id: ws.data.id });
-        console.log(`+ ${name} (${ws.data.id}) — ${state.players.length} giocatori`);
-      } else if (msg.t === "input") {
-        const p = state.players.find((p) => p.id === ws.data.id);
-        if (p) p.input = Number(msg.bits) & ALL_INPUTS;
-      } else if (msg.t === "team") {
-        switchTeam(state, ws.data.id);
+      if (msg.t === "hello") return hello(ws, String(msg.token ?? ""));
+      if (msg.t === "ping") return send(ws, { t: "pong", c: Number(msg.c) });
+      const session = ws.data.session;
+      if (!session) return;
+
+      switch (msg.t) {
+        case "list":
+          return sendRooms(ws);
+        case "create":
+          return create(ws, session, msg.name, msg.kind, msg.minutes);
+        case "join":
+          return joinByCode(ws, session, msg.name, String(msg.code ?? ""));
+        case "leave":
+          leave(session);
+          return send(ws, { t: "left" });
+        case "input": {
+          const p = session.room?.player(session.id);
+          if (p && Array.isArray(msg.i)) {
+            p.input = { mx: clampAxis(msg.i[0]), my: clampAxis(msg.i[1]), kick: msg.i[2] === 1 };
+          }
+          return;
+        }
+        case "team":
+          if (session.room) switchTeam(session.room.state, session.id);
+          return;
+        case "start": {
+          const room = session.room;
+          if (!room || room.hostId !== session.id) return;
+          if (msg.minutes && (MATCH_MINUTES as readonly number[]).includes(msg.minutes)) room.minutes = msg.minutes;
+          startMatch(room.state, room.minutes);
+          room.push({ type: "start", tick: room.state.tick + 1 });
+          return broadcastRoom(room);
+        }
       }
     },
     close(ws: Socket) {
-      removePlayer(state, ws.data.id);
-      console.log(`- ${ws.data.id} — ${state.players.length} giocatori`);
+      const session = ws.data.session;
+      if (!session || session.ws !== ws) return;
+      session.ws = null;
+      const p = session.room?.player(session.id);
+      if (p) {
+        p.away = true;
+        p.input = NO_INPUT;
+      }
+      session.graceTimer = setTimeout(() => {
+        leave(session);
+        sessions.delete(session.token);
+      }, GRACE_MS);
     },
   },
 });
+
+function hello(ws: Socket, token: string) {
+  if (token.length < 16 || token.length > 64) return send(ws, { t: "error", message: "Token non valido" });
+  let session = sessions.get(token);
+  if (session) {
+    if (session.graceTimer) clearTimeout(session.graceTimer);
+    session.graceTimer = null;
+    if (session.ws && session.ws !== ws) session.ws.close(4000, "Sessione aperta altrove");
+  } else {
+    session = { id: crypto.randomUUID().slice(0, 8), token, ws: null, room: null, graceTimer: null };
+    sessions.set(token, session);
+  }
+  session.ws = ws;
+  ws.data.session = session;
+  send(ws, { t: "welcome", id: session.id });
+
+  // Riconnessione: si riprende il posto in partita.
+  const room = session.room;
+  const p = room?.player(session.id);
+  if (room && p) {
+    p.away = false;
+    ws.subscribe(room.topic);
+    send(ws, { t: "joined", room: room.info() });
+  } else {
+    session.room = null;
+  }
+}
+
+function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number) {
+  const name = cleanName(rawName);
+  const room = new Room(
+    newCode((c) => rooms.has(c)),
+    `Partita di ${name}`,
+    kind === "online" ? "online" : "local",
+    ws.data.network.key,
+    (MATCH_MINUTES as readonly number[]).includes(minutes) ? minutes : 3,
+    session.id,
+  );
+  rooms.set(room.code, room);
+  console.log(`# ${room.code} creata (${room.kind}, rete ${room.networkKey})`);
+  enter(ws, session, room, name);
+}
+
+function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: string) {
+  const room = rooms.get(rawCode.trim().toUpperCase());
+  if (!room) return send(ws, { t: "error", message: "Partita non trovata. Controlla il codice." });
+  if (room.kind === "local" && room.networkKey !== ws.data.network.key) {
+    return send(ws, { t: "error", message: "Questa partita è riservata alla rete locale di chi l'ha creata." });
+  }
+  if (session.room === room) return send(ws, { t: "joined", room: room.info() });
+  if (room.full) return send(ws, { t: "error", message: "La partita è piena." });
+  enter(ws, session, room, cleanName(rawName));
+}
+
+function enter(ws: Socket, session: Session, room: Room, name: string) {
+  leave(session);
+  session.room = room;
+  room.add(session.id, name);
+  ws.subscribe(room.topic);
+  send(ws, { t: "joined", room: room.info() });
+  broadcastRoom(room);
+  console.log(`+ ${name} → ${room.code} (${room.state.players.length})`);
+}
+
+function leave(session: Session) {
+  const room = session.room;
+  if (!room) return;
+  session.room = null;
+  session.ws?.unsubscribe(room.topic);
+  room.remove(session.id);
+  console.log(`- ${session.id} ← ${room.code} (${room.state.players.length})`);
+  if (room.state.players.length === 0) {
+    rooms.delete(room.code);
+    console.log(`# ${room.code} chiusa`);
+  } else {
+    broadcastRoom(room);
+  }
+}
+
+function sendRooms(ws: Socket) {
+  const { key, lan } = ws.data.network;
+  const visible = [...rooms.values()]
+    .filter((r) => r.kind === "local" && r.networkKey === key)
+    .map((r) => r.summary());
+  send(ws, { t: "rooms", rooms: visible, network: lan ? "lan" : "internet" });
+}
+
+function broadcastRoom(room: Room) {
+  server.publish(room.topic, JSON.stringify({ t: "room", room: room.info() } satisfies ServerMessage));
+}
 
 function send(ws: Socket, msg: ServerMessage) {
   ws.send(JSON.stringify(msg));
 }
 
-const round = (n: number) => Math.round(n * 100) / 100;
+function cleanName(raw: unknown) {
+  return String(raw ?? "").trim().slice(0, 16) || "Giocatore";
+}
 
-function snapshot(): Snapshot {
-  return {
-    t: "snap",
-    tick: state.tick,
-    ball: [round(state.ball.x), round(state.ball.y)],
-    players: state.players.map((p) => ({
-      id: p.id,
-      name: p.name,
-      team: p.team,
-      x: round(p.x),
-      y: round(p.y),
-      k: (p.input & InputBit.kick) !== 0,
-    })),
-    score: [state.score.red, state.score.blue],
-    phase: state.phase,
-    events: pendingEvents,
-  };
+function clampAxis(n: unknown) {
+  const v = Math.round(Number(n));
+  return Number.isFinite(v) ? Math.max(-100, Math.min(100, v)) : 0;
 }
 
 // Loop a passo fisso: setInterval non è preciso, quindi accumuliamo il tempo.
@@ -102,10 +221,11 @@ setInterval(() => {
   acc = Math.min(acc + now - last, DT * 10);
   last = now;
   while (acc >= DT) {
-    step(state, pendingEvents);
     acc -= DT;
-    server.publish("game", JSON.stringify(snapshot()));
-    pendingEvents = [];
+    for (const room of rooms.values()) {
+      room.tick();
+      server.publish(room.topic, JSON.stringify(room.snapshot()));
+    }
   }
 }, 4);
 

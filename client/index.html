@@ -2,34 +2,111 @@
 <html lang="it">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <title>Balón</title>
+    <meta name="theme-color" content="#0a1410" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <div id="game"></div>
 
-    <div id="hud" hidden>
-      <div id="score">
-        <span class="team red">ROSSI</span>
-        <span class="num" id="score-red">0</span>
-        <span class="sep">–</span>
-        <span class="num" id="score-blue">0</span>
-        <span class="team blue">BLU</span>
+    <main id="home">
+      <div class="panel">
+        <h1>Bal<span>ó</span>n</h1>
+
+        <label class="field">
+          <span>Il tuo nome</span>
+          <input id="name" placeholder="Giocatore" maxlength="16" autocomplete="off" />
+        </label>
+
+        <section id="invite" hidden>
+          <p>Sei stato invitato alla partita <strong id="invite-code"></strong></p>
+          <button id="invite-join" class="primary">Entra</button>
+        </section>
+
+        <section>
+          <h2>Partite sulla tua rete</h2>
+          <ul id="room-list"></ul>
+          <p id="room-empty" class="muted">Nessuna partita locale. Creane una!</p>
+        </section>
+
+        <section>
+          <h2>Crea partita</h2>
+          <div class="segmented" id="kind">
+            <button type="button" data-value="local" class="on">Rete locale</button>
+            <button type="button" data-value="online">Online con codice</button>
+          </div>
+          <p class="muted" id="kind-hint"></p>
+          <div class="chips" id="minutes"></div>
+          <button id="create" class="primary">Crea partita</button>
+        </section>
+
+        <form id="join-code">
+          <input id="code" placeholder="Codice" maxlength="4" autocomplete="off" autocapitalize="characters" />
+          <button type="submit">Entra</button>
+        </form>
+
+        <p id="conn" class="muted"></p>
       </div>
-      <div id="banner"></div>
-      <div id="status"></div>
+    </main>
+
+    <div id="hud" hidden>
+      <div id="room-badge">
+        <span id="room-kind"></span>
+        <strong id="room-code"></strong>
+        <button id="copy-link" title="Copia link d'invito">Invita</button>
+        <span id="ping"></span>
+      </div>
+
+      <div id="scoreboard">
+        <div id="score">
+          <span class="team red">ROSSI</span>
+          <span class="num" id="score-red">0</span>
+          <span class="sep">–</span>
+          <span class="num" id="score-blue">0</span>
+          <span class="team blue">BLU</span>
+        </div>
+        <div id="clock"></div>
+      </div>
+
+      <div id="actions">
+        <button id="team-btn" title="Cambia squadra (T)">Cambia squadra</button>
+        <button id="leave-btn" title="Esci dalla partita">Esci</button>
+      </div>
+
+      <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+      <div id="notice"></div>
+
+      <div id="host-panel" hidden>
+        <div class="chips" id="host-minutes"></div>
+        <button id="start-btn" class="primary"></button>
+      </div>
+      <div id="wait-host" hidden></div>
+
       <div id="help">
         <kbd>WASD</kbd>/<kbd>frecce</kbd> muovi · <kbd>Spazio</kbd> calcia · <kbd>T</kbd> cambia squadra
       </div>
     </div>
 
-    <form id="join">
-      <h1>Bal<span>ó</span>n</h1>
-      <p>Calcio a dischi, multiplayer. Apri più schede o invita amici sulla stessa rete.</p>
-      <input id="name" placeholder="Il tuo nome" maxlength="16" autocomplete="off" autofocus />
-      <button type="submit">Gioca</button>
-    </form>
+    <div id="touch" hidden>
+      <div id="stick-zone"></div>
+      <div id="stick-base"><div id="stick-knob"></div></div>
+      <div id="kick-btn">CALCIA</div>
+    </div>
+
+    <div id="rotate">
+      <div class="phone"></div>
+      <p>Ruota il telefono in orizzontale</p>
+    </div>
+
+    <div id="toast"></div>
 
     <script type="module" src="./main.ts"></script>
   </body>
