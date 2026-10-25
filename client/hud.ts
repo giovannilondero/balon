@@ -1,5 +1,6 @@
 import { MATCH_MINUTES, type Team } from "../shared/game.ts";
-import type { RoomInfo } from "../shared/protocol.ts";
+import { BOT_LEVELS, type RoomInfo } from "../shared/protocol.ts";
+import { LEVEL_LABEL } from "./lobby.ts";
 import type { NetClient, RenderState } from "./net.ts";
 import { $, chips, toast } from "./dom.ts";
 
@@ -9,6 +10,7 @@ const TEAM_CSS: Record<Team, string> = { red: "#ff6b70", blue: "#6f9bff" };
 export class Hud {
   private hostMinutes = 3;
   private minuteChips;
+  private levelChips;
   private text = new Map<string, string>();
 
   constructor(
@@ -16,6 +18,12 @@ export class Hud {
     onLeave: () => void,
   ) {
     this.minuteChips = chips($("host-minutes"), MATCH_MINUTES, this.hostMinutes, (m) => `${m} min`, (m) => (this.hostMinutes = m));
+    this.levelChips = chips($("bot-level"), BOT_LEVELS, "medium", (l) => LEVEL_LABEL[l], (level) => net.send({ t: "botLevel", level }));
+    $("bot-controls").addEventListener("click", (e) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-team]");
+      if (!btn) return;
+      net.send({ t: "bot", team: btn.dataset.team as Team, delta: btn.dataset.delta === "1" ? 1 : -1 });
+    });
     $("start-btn").addEventListener("click", () => net.send({ t: "start", minutes: this.hostMinutes }));
     $("team-btn").addEventListener("click", () => net.send({ t: "team" }));
     $("leave-btn").addEventListener("click", onLeave);
@@ -34,6 +42,9 @@ export class Hud {
   }
 
   setRoom(room: RoomInfo) {
+    this.set("bots-red", String(room.bots.red));
+    this.set("bots-blue", String(room.bots.blue));
+    this.levelChips.set(room.botLevel);
     this.set("room-code", room.code);
     this.set("room-kind", room.kind === "local" ? "Rete locale" : "Online");
   }

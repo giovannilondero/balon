@@ -17,7 +17,9 @@ Apri http://localhost:5173 (più schede = più giocatori; sulla stessa rete funz
   (stesso IP pubblico visto dal server; se il server gira in LAN, tutti gli IP privati contano come stessa rete).
 - **Online con codice**: non elencata, si entra con il codice di 4 lettere o col link d'invito (`?p=CODICE`).
 
-Chi crea la partita è l'host: sceglie la durata e la avvia. A tempo scaduto in parità si va al golden goal.
+Chi crea la partita è l'host: sceglie la durata e la avvia, e può aggiungere giocatori CPU
+a ciascuna squadra (Facile, Medio, Difficile). "Gioca contro la CPU" nella home crea una partita privata contro un bot;
+se una stanza è piena, una persona che entra prende il posto di un bot. A tempo scaduto in parità si va al golden goal.
 Se cadi (reload, app in background, rete) hai 20 secondi per rientrare al tuo posto.
 
 Dietro un reverse proxy imposta `TRUST_PROXY=1`, così il server legge l'IP reale da `X-Forwarded-For`.
@@ -41,5 +43,6 @@ pnpm build && pnpm start   # http://localhost:3001
 - `shared/protocol.ts`: messaggi client ↔ server
 - `server/index.ts`: server Bun autoritativo via WebSocket, sessioni e riconnessione
 - `server/rooms.ts`, `server/network.ts`: stanze e riconoscimento della rete del client
+- `server/bot.ts`: giocatori CPU; producono lo stesso input di un umano (stick + calcio)
 - `client/`: rendering Three.js, interpolazione degli snapshot, lobby, HUD, input tastiera/touch, audio sintetizzato
 - `scripts/icons.ts`: genera favicon e icone PWA in `client/public/` (`pnpm icons`)

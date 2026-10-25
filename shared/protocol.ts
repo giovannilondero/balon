@@ -2,17 +2,24 @@ import type { GameEvent, GameState, Team } from "./game.ts";
 
 export type RoomKind = "local" | "online";
 
+export type BotLevel = "easy" | "medium" | "hard";
+export const BOT_LEVELS: readonly BotLevel[] = ["easy", "medium", "hard"];
+
 export type ClientMessage =
   /** Primo messaggio: il token permette di riprendere il posto dopo una disconnessione. */
   | { t: "hello"; token: string }
   | { t: "list" }
-  | { t: "create"; name: string; kind: RoomKind; minutes: number }
+  /** cpu: crea la partita con un avversario controllato dal computer. */
+  | { t: "create"; name: string; kind: RoomKind; minutes: number; cpu?: BotLevel }
   | { t: "join"; name: string; code: string }
   | { t: "leave" }
   /** [mx, my, kick] con mx, my in [-100, 100]. */
   | { t: "input"; i: [number, number, 0 | 1] }
   | { t: "team" }
   | { t: "start"; minutes?: number }
+  /** Solo host: aggiunge (+1) o toglie (-1) un bot a una squadra. */
+  | { t: "bot"; team: Team; delta: 1 | -1 }
+  | { t: "botLevel"; level: BotLevel }
   | { t: "ping"; c: number };
 
 export interface RoomSummary {
@@ -20,6 +27,8 @@ export interface RoomSummary {
   name: string;
   kind: RoomKind;
   players: number;
+  /** Quanti dei giocatori sono bot. */
+  cpu: number;
   max: number;
   match: GameState["match"];
 }
@@ -27,6 +36,8 @@ export interface RoomSummary {
 export interface RoomInfo extends RoomSummary {
   hostId: string;
   minutes: number;
+  bots: Record<Team, number>;
+  botLevel: BotLevel;
 }
 
 export interface SnapshotPlayer {
@@ -38,6 +49,7 @@ export interface SnapshotPlayer {
   /** Tasto calcio premuto. */
   k: boolean;
   away: boolean;
+  bot: boolean;
 }
 
 export interface Snapshot {
