@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <clipPath id="bg"><rect width="512" height="512" rx="112.64"/></clipPath>
+    <radialGradient id="vignette" cx="0.5" cy="0.45" r="0.75">
+      <stop offset="0.55" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#03140a" stop-opacity="0.55"/>
+    </radialGradient>
+  </defs>
+  <g clip-path="url(#bg)">
+    <rect width="512" height="512" fill="#2b7f39"/><rect x="0" width="85.33333333333333" height="512" fill="#35923f"/><rect x="170.66666666666666" width="85.33333333333333" height="512" fill="#35923f"/><rect x="341.3333333333333" width="85.33333333333333" height="512" fill="#35923f"/>
+    <rect width="512" height="512" fill="url(#vignette)"/>
+    
+  <defs>
+    <radialGradient id="ballBase" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.6" stop-color="#eef1ee"/>
+      <stop offset="1" stop-color="#b9c2bb"/>
+    </radialGradient>
+    <radialGradient id="ballShade" cx="0.38" cy="0.32" r="0.8">
+      <stop offset="0.45" stop-color="#000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0b2312" stop-opacity="0.55"/>
+    </radialGradient>
+    <clipPath id="ballClip"><circle cx="256" cy="240.64" r="184.32"/></clipPath>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="16.5888"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="11.059199999999999"/></filter>
+  </defs>
+  <ellipse cx="278.1184" cy="419.43039999999996" rx="169.5744" ry="44.236799999999995" fill="#062210" opacity="0.6" filter="url(#blur)"/>
+  <circle cx="256" cy="240.64" r="184.32" fill="url(#ballBase)"/>
+  <g clip-path="url(#ballClip)">
+    <polygon points="256.0,190.9 303.3,225.3 285.3,280.9 226.7,280.9 208.7,225.3" fill="#151a17"/>
+    <polygon points="256.0,113.2 208.7,94.3 226.7,63.7 285.3,63.7 303.3,94.3" fill="#151a17"/><polygon points="377.2,201.3 380.6,150.4 415.3,158.1 433.4,213.8 409.8,240.4" fill="#151a17"/><polygon points="330.9,343.8 380.3,331.2 383.7,366.6 336.4,401.0 303.7,386.9" fill="#151a17"/><polygon points="181.1,343.8 208.3,386.9 175.6,401.0 128.3,366.6 131.7,331.2" fill="#151a17"/><polygon points="134.8,201.3 102.2,240.4 78.6,213.8 96.7,158.1 131.4,150.4" fill="#151a17"/>
+    <path d="M256.0 190.9 L256.0 113.2 M303.3 94.3 L380.6 150.4 M303.3 225.3 L377.2 201.3 M409.8 240.4 L380.3 331.2 M285.3 280.9 L330.9 343.8 M303.7 386.9 L208.3 386.9 M226.7 280.9 L181.1 343.8 M131.7 331.2 L102.2 240.4 M208.7 225.3 L134.8 201.3 M131.4 150.4 L208.7 94.3 " stroke="#4a524c" stroke-width="4.608" stroke-linecap="round" fill="none"/>
+    <circle cx="256" cy="240.64" r="184.32" fill="url(#ballShade)"/>
+    <ellipse cx="189.6448" cy="163.2256" rx="47.9232" ry="29.4912" fill="#fff" opacity="0.7" transform="rotate(-35 189.6448 163.2256)" filter="url(#glow)"/>
+  </g>
+  <circle cx="256" cy="240.64" r="183.32" fill="none" stroke="#0b2312" stroke-opacity="0.35" stroke-width="2"/>
+  </g>
+</svg>

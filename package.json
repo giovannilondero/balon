@@ -6,12 +6,14 @@
     "dev": "concurrently -k -n server,client -c yellow,cyan \"bun --watch server/index.ts\" \"vite\"",
     "build": "vite build",
     "start": "bun server/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "icons": "bun scripts/icons.ts"
   },
   "dependencies": {
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@types/bun": "^1.4.4",
     "@types/three": "^0.186.0",
     "concurrently": "^10.0.6",
