@@ -10,7 +10,7 @@ import {
   type Team,
 } from "../shared/game.ts";
 import type { RoomInfo, RoomKind, RoomSummary, Snapshot } from "../shared/protocol.ts";
-import { BotBrain, botName, type BotLevel } from "./bot.ts";
+import { BotBrain, botName, isBotId, newBotId, type BotLevel } from "./bot.ts";
 
 // Niente lettere/cifre ambigue (0/O, 1/I/L).
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -68,7 +68,7 @@ export class Room {
 
   addBot(team: Team) {
     if (this.full) return;
-    const id = `cpu-${Math.random().toString(36).slice(2, 8)}`;
+    const id = newBotId();
     addPlayer(this.state, id, botName(team, this.botCounts()[team] + 1), team);
     this.bots.set(id, new BotBrain(id, this.botLevel));
   }
@@ -99,12 +99,15 @@ export class Room {
     return this.state.players.find((p) => p.id === id);
   }
 
+  /** Avanza di un tick. Restituisce true se la partita è appena finita. */
   tick() {
     for (const brain of this.bots.values()) {
       const p = this.player(brain.id);
       if (p) brain.update(this.state, p);
     }
+    const summary = this.state.summary;
     step(this.state, this.events);
+    return this.state.summary !== summary;
   }
 
   /** Eventi generati fuori dalla simulazione (es. fischio d'inizio). */
@@ -125,7 +128,15 @@ export class Room {
   }
 
   info(): RoomInfo {
-    return { ...this.summary(), hostId: this.hostId, minutes: this.minutes, bots: this.botCounts(), botLevel: this.botLevel };
+    const last = this.state.summary;
+    return {
+      ...this.summary(),
+      hostId: this.hostId,
+      minutes: this.minutes,
+      bots: this.botCounts(),
+      botLevel: this.botLevel,
+      lastMatch: last && { ...last, players: last.players.map((p) => ({ ...p, bot: isBotId(p.id) })) },
+    };
   }
 
   snapshot(): Snapshot {

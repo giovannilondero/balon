@@ -32,6 +32,8 @@ export const MAX_PLAYERS = 10;
 export const MATCH_MINUTES = [2, 3, 5, 10] as const;
 
 const GOAL_PAUSE_TICKS = TICK_RATE * 2.5;
+/** Se nessuno batte il calcio d'inizio entro questo tempo, si gioca comunque. */
+const KICKOFF_TIMEOUT_TICKS = TICK_RATE * 5;
 
 export type Team = "red" | "blue";
 
@@ -70,6 +72,48 @@ export type GameEvent =
   | { type: "golden"; tick: number }
   | { type: "end"; tick: number; winner: Team | null };
 
+export interface PlayerStats {
+  id: string;
+  name: string;
+  team: Team;
+  goals: number;
+  ownGoals: number;
+  kicks: number;
+  touches: number;
+}
+
+export interface GoalRecord {
+  /** Secondi di gioco effettivo dall'inizio della partita. */
+  time: number;
+  team: Team;
+  scorerId: string | null;
+  scorerName: string | null;
+  own: boolean;
+}
+
+export interface MatchStats {
+  /** Tick di gioco effettivo (esclusi kickoff e pause dopo i gol). */
+  playTicks: number;
+  goals: GoalRecord[];
+  players: Record<string, PlayerStats>;
+  /** Tick di possesso per squadra (squadra dell'ultimo tocco). */
+  possession: Record<Team, number>;
+}
+
+export interface MatchSummary {
+  winner: Team | null;
+  score: [number, number];
+  /** Decisa al golden goal. */
+  golden: boolean;
+  /** Durata effettiva in secondi. */
+  duration: number;
+  goals: GoalRecord[];
+  players: PlayerStats[];
+  /** Percentuale di possesso dei rossi (i blu sono il complemento). */
+  possessionRed: number;
+  mvpId: string | null;
+}
+
 /**
  * match: warmup = palleggio libero, running = partita col timer, ended = risultato.
  * ball:  kickoff = attesa del calcio d'inizio, play = gioco, goal = pausa dopo un gol.
@@ -88,6 +132,9 @@ export interface GameState {
   golden: boolean;
   /** Ultimo giocatore che ha toccato la palla, per attribuire i gol. */
   lastTouch: string | null;
+  stats: MatchStats;
+  /** Riepilogo dell'ultima partita conclusa. */
+  summary: MatchSummary | null;
 }
 
 const POSTS: { x: number; y: number }[] = [
@@ -110,7 +157,21 @@ export function createState(): GameState {
     timeLeft: 0,
     golden: false,
     lastTouch: null,
+    stats: emptyStats(),
+    summary: null,
   };
+}
+
+function emptyStats(): MatchStats {
+  return { playTicks: 0, goals: [], players: {}, possession: { red: 0, blue: 0 } };
+}
+
+/** Statistiche del giocatore, create al primo uso; nome e squadra restano aggiornati. */
+function statsOf(state: GameState, p: PlayerState): PlayerStats {
+  const s = (state.stats.players[p.id] ??= { id: p.id, name: p.name, team: p.team, goals: 0, ownGoals: 0, kicks: 0, touches: 0 });
+  s.name = p.name;
+  s.team = p.team;
+  return s;
 }
 
 /** Senza squadra esplicita va in quella con meno giocatori. */
@@ -152,6 +213,16 @@ export function startMatch(state: GameState, minutes: number) {
   state.timeLeft = Math.round(minutes * 60 * TICK_RATE);
   state.golden = false;
   state.kickoffTeam = Math.random() < 0.5 ? "red" : "blue";
+  state.stats = emptyStats();
+  for (const p of state.players) statsOf(state, p);
+  resetPositions(state);
+}
+
+/** Torna al palleggio libero dopo una partita. */
+export function backToWarmup(state: GameState) {
+  state.match = "warmup";
+  state.score = { red: 0, blue: 0 };
+  state.golden = false;
   resetPositions(state);
 }
 
@@ -176,21 +247,26 @@ export function resetPositions(state: GameState) {
   state.lastTouch = null;
   for (const p of state.players) placePlayer(state, p);
   state.phase = kickoffRules(state) ? "kickoff" : "play";
+  state.phaseTimer = KICKOFF_TIMEOUT_TICKS;
 }
 
 export function step(state: GameState, events: GameEvent[]) {
   state.tick++;
   const { ball } = state;
+  const running = state.match === "running";
+  // A partita finita i comandi non contano: i dischi rallentano fino a fermarsi.
+  const frozen = state.match === "ended";
 
   for (const p of state.players) {
-    let dx = p.input.mx / 100;
-    let dy = p.input.my / 100;
+    const input = frozen ? NO_INPUT : p.input;
+    let dx = input.mx / 100;
+    let dy = input.my / 100;
     const len = Math.hypot(dx, dy);
     if (len > 1) {
       dx /= len;
       dy /= len;
     }
-    const kick = p.input.kick;
+    const kick = input.kick;
     const a = kick ? PLAYER.kickingAccel : PLAYER.accel;
     p.vx += dx * a;
     p.vy += dy * a;
@@ -210,6 +286,7 @@ export function step(state: GameState, events: GameEvent[]) {
         ball.vy += (ky / d) * PLAYER.kickStrength * BALL.invMass;
         p.kickArmed = false;
         state.lastTouch = p.id;
+        if (running) statsOf(state, p).kicks++;
         events.push({ type: "kick", tick: state.tick, id: p.id, x: ball.x, y: ball.y });
       }
     }
@@ -219,7 +296,10 @@ export function step(state: GameState, events: GameEvent[]) {
   for (const p of state.players) integrate(p, PLAYER.damping);
 
   for (const p of state.players) {
-    if (collide(p, PLAYER.r, PLAYER.invMass, ball, BALL.r, BALL.invMass, PLAYER.bounce)) state.lastTouch = p.id;
+    if (!collide(p, PLAYER.r, PLAYER.invMass, ball, BALL.r, BALL.invMass, PLAYER.bounce)) continue;
+    // Un tocco conta quando la palla passa a un giocatore diverso, non a ogni tick di contatto.
+    if (running && state.lastTouch !== p.id) statsOf(state, p).touches++;
+    state.lastTouch = p.id;
   }
   for (let i = 0; i < state.players.length; i++) {
     for (let j = i + 1; j < state.players.length; j++) {
@@ -245,10 +325,14 @@ export function step(state: GameState, events: GameEvent[]) {
   }
 
   if (state.phase === "kickoff") {
-    if (ball.vx !== 0 || ball.vy !== 0) state.phase = "play";
-    else if (!kickoffRules(state)) state.phase = "play";
+    if (ball.vx !== 0 || ball.vy !== 0 || !kickoffRules(state) || --state.phaseTimer <= 0) state.phase = "play";
   } else if (state.phase === "play") {
-    if (state.match === "running" && !state.golden && --state.timeLeft <= 0) {
+    if (running) {
+      state.stats.playTicks++;
+      const holder = state.players.find((p) => p.id === state.lastTouch);
+      if (holder) state.stats.possession[holder.team]++;
+    }
+    if (running && !state.golden && --state.timeLeft <= 0) {
       state.timeLeft = 0;
       if (state.score.red === state.score.blue) {
         state.golden = true;
@@ -258,12 +342,14 @@ export function step(state: GameState, events: GameEvent[]) {
       }
     }
     const line = FIELD.w / 2 + BALL.r;
-    if (Math.abs(ball.x) > line) {
+    // A partita finita la palla può finire in rete, ma non è più gol.
+    if (Math.abs(ball.x) > line && state.match !== "ended") {
       const team: Team = ball.x > 0 ? "red" : "blue";
       events.push({ type: "goal", tick: state.tick, team, scorer: state.lastTouch });
       state.phase = "goal";
       state.phaseTimer = GOAL_PAUSE_TICKS;
       if (state.match === "running") {
+        recordGoal(state, team);
         state.score[team]++;
         state.kickoffTeam = team === "red" ? "blue" : "red";
         if (state.golden) endMatch(state, events);
@@ -274,11 +360,46 @@ export function step(state: GameState, events: GameEvent[]) {
   }
 }
 
+function recordGoal(state: GameState, team: Team) {
+  const scorer = state.players.find((p) => p.id === state.lastTouch);
+  const own = scorer !== undefined && scorer.team !== team;
+  if (scorer) {
+    const s = statsOf(state, scorer);
+    if (own) s.ownGoals++;
+    else s.goals++;
+  }
+  state.stats.goals.push({
+    time: Math.floor(state.stats.playTicks / TICK_RATE),
+    team,
+    scorerId: scorer?.id ?? null,
+    scorerName: scorer?.name ?? null,
+    own,
+  });
+}
+
 function endMatch(state: GameState, events: GameEvent[]) {
   const { red, blue } = state.score;
+  const winner: Team | null = red === blue ? null : red > blue ? "red" : "blue";
+  for (const p of state.players) statsOf(state, p);
+  const players = Object.values(state.stats.players);
+  const { possession } = state.stats;
+  const held = possession.red + possession.blue;
+  // Migliore in campo: i gol pesano più di tutto, poi tiri e tocchi.
+  const rating = (p: PlayerStats) => p.goals * 10 - p.ownGoals * 5 + p.kicks + p.touches * 0.3;
+  const mvp = players.reduce<PlayerStats | null>((best, p) => (!best || rating(p) > rating(best) ? p : best), null);
+  state.summary = {
+    winner,
+    score: [red, blue],
+    golden: state.golden,
+    duration: Math.floor(state.stats.playTicks / TICK_RATE),
+    goals: state.stats.goals,
+    players,
+    possessionRed: held ? Math.round((possession.red / held) * 100) : 50,
+    mvpId: mvp && rating(mvp) > 0 ? mvp.id : null,
+  };
   state.match = "ended";
   state.golden = false;
-  events.push({ type: "end", tick: state.tick, winner: red === blue ? null : red > blue ? "red" : "blue" });
+  events.push({ type: "end", tick: state.tick, winner });
 }
 
 function integrate(d: Disc, damping: number) {

@@ -64,10 +64,11 @@ export class Hud {
     this.set("ping", this.net.ping === null ? "" : `${this.net.ping} ms`);
 
     const isHost = room !== null && room.hostId === meId;
-    const waiting = state.match !== "running";
+    // A fine partita le scelte dell'host stanno nel riepilogo.
+    const waiting = state.match === "warmup";
     $("host-panel").hidden = !(waiting && isHost);
     $("wait-host").hidden = !(waiting && !isHost);
-    this.set("start-btn", state.match === "ended" ? "Rivincita" : "Inizia partita");
+    this.set("start-btn", "Inizia partita");
     const host = state.players.find((p) => p.id === room?.hostId);
     this.set("wait-host", `In attesa che ${host?.name ?? "l'host"} avvii la partita`);
   }
@@ -75,11 +76,6 @@ export class Hud {
   goal(team: Team, scorerName: string | null, ownGoal: boolean) {
     const sub = scorerName ? (ownGoal ? `Autogol di ${scorerName}` : scorerName) : "";
     this.banner("GOL!", sub, TEAM_CSS[team]);
-  }
-
-  end(winner: Team | null) {
-    if (winner) this.banner(`Vincono i ${TEAM_NAME[winner]}!`, "Fine partita", TEAM_CSS[winner]);
-    else this.banner("Pareggio", "Fine partita", "#fff");
   }
 
   start() {

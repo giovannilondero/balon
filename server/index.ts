@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { MATCH_MINUTES, MAX_PLAYERS, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
+import { backToWarmup, MATCH_MINUTES, MAX_PLAYERS, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
 import type { BotLevel, ClientMessage, RoomKind, ServerMessage } from "../shared/protocol.ts";
 import { networkOf, type NetworkId } from "./network.ts";
 import { BOT_LEVELS } from "./bot.ts";
@@ -89,6 +89,12 @@ const server = Bun.serve<SocketData>({
           if (msg.minutes && (MATCH_MINUTES as readonly number[]).includes(msg.minutes)) room.minutes = msg.minutes;
           startMatch(room.state, room.minutes);
           room.push({ type: "start", tick: room.state.tick + 1 });
+          return broadcastRoom(room);
+        }
+        case "warmup": {
+          const room = session.room;
+          if (!room || room.hostId !== session.id || room.state.match !== "ended") return;
+          backToWarmup(room.state);
           return broadcastRoom(room);
         }
         case "bot": {
@@ -244,7 +250,7 @@ setInterval(() => {
   while (acc >= DT) {
     acc -= DT;
     for (const room of rooms.values()) {
-      room.tick();
+      if (room.tick()) broadcastRoom(room);
       server.publish(room.topic, JSON.stringify(room.snapshot()));
     }
   }

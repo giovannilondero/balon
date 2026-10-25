@@ -1,4 +1,4 @@
-import type { GameEvent, GameState, Team } from "./game.ts";
+import type { GameEvent, GameState, MatchSummary, PlayerStats, Team } from "./game.ts";
 
 export type RoomKind = "local" | "online";
 
@@ -17,6 +17,8 @@ export type ClientMessage =
   | { t: "input"; i: [number, number, 0 | 1] }
   | { t: "team" }
   | { t: "start"; minutes?: number }
+  /** Solo host: chiude il riepilogo e torna al palleggio libero. */
+  | { t: "warmup" }
   /** Solo host: aggiunge (+1) o toglie (-1) un bot a una squadra. */
   | { t: "bot"; team: Team; delta: 1 | -1 }
   | { t: "botLevel"; level: BotLevel }
@@ -38,7 +40,11 @@ export interface RoomInfo extends RoomSummary {
   minutes: number;
   bots: Record<Team, number>;
   botLevel: BotLevel;
+  /** Riepilogo dell'ultima partita: resta disponibile anche a chi rientra dopo la fine. */
+  lastMatch: MatchReport | null;
 }
+
+export type MatchReport = Omit<MatchSummary, "players"> & { players: (PlayerStats & { bot: boolean })[] };
 
 export interface SnapshotPlayer {
   id: string;
