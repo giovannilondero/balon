@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Balón</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="game"></div>
+
+    <div id="hud" hidden>
+      <div id="score">
+        <span class="team red">ROSSI</span>
+        <span class="num" id="score-red">0</span>
+        <span class="sep">–</span>
+        <span class="num" id="score-blue">0</span>
+        <span class="team blue">BLU</span>
+      </div>
+      <div id="banner"></div>
+      <div id="status"></div>
+      <div id="help">
+        <kbd>WASD</kbd>/<kbd>frecce</kbd> muovi · <kbd>Spazio</kbd> calcia · <kbd>T</kbd> cambia squadra
+      </div>
+    </div>
+
+    <form id="join">
+      <h1>Bal<span>ó</span>n</h1>
+      <p>Calcio a dischi, multiplayer. Apri più schede o invita amici sulla stessa rete.</p>
+      <input id="name" placeholder="Il tuo nome" maxlength="16" autocomplete="off" autofocus />
+      <button type="submit">Gioca</button>
+    </form>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

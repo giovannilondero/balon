@@ -1,0 +1,130 @@
+* { box-sizing: border-box; margin: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #0a1410;
+  color: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+#game canvas { display: block; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; }
+
+#score {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: rgb(8 14 12 / 0.72);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.35);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+#score .team { font-size: 13px; }
+#score .red { color: #ff7a7e; }
+#score .blue { color: #7ea6ff; }
+#score .num { font-size: 26px; font-variant-numeric: tabular-nums; min-width: 1ch; text-align: center; }
+#score .sep { opacity: 0.4; }
+
+#banner {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  translate: -50% -50%;
+  font-size: clamp(56px, 12vw, 150px);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  text-shadow: 0 8px 40px rgb(0 0 0 / 0.5);
+  opacity: 0;
+  scale: 0.6;
+}
+#banner.show { animation: banner 2.2s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards; }
+@keyframes banner {
+  0% { opacity: 0; scale: 0.6; }
+  12% { opacity: 1; scale: 1.05; }
+  20% { scale: 1; }
+  80% { opacity: 1; scale: 1; }
+  100% { opacity: 0; scale: 1.1; }
+}
+
+#status {
+  position: absolute;
+  top: 24px;
+  right: 22px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+#help {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  translate: -50% 0;
+  font-size: 13px;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+}
+
+#join {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(ellipse at center, rgb(10 20 16 / 0.55), rgb(10 20 16 / 0.92));
+  backdrop-filter: blur(3px);
+}
+#join[hidden] { display: none; }
+#join h1 {
+  font-size: clamp(64px, 14vw, 128px);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+}
+#join h1 span { color: #ffe066; }
+#join p { max-width: 34ch; opacity: 0.75; text-wrap: balance; }
+#join input, #join button {
+  width: 260px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 0;
+  font: inherit;
+  font-size: 17px;
+}
+#join input {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+  outline: 2px solid transparent;
+  transition: outline-color 0.15s;
+}
+#join input:focus { outline-color: #ffe066; }
+#join button {
+  background: #ffe066;
+  color: #1a1a1a;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+#join button:active { transform: scale(0.97); }
