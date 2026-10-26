@@ -7,6 +7,7 @@ import {
   TICK_RATE,
   type GameEvent,
   type GameState,
+  type Input,
   type Team,
 } from "../shared/game.ts";
 import type { RoomInfo, RoomKind, RoomSummary, Snapshot } from "../shared/protocol.ts";
@@ -14,6 +15,10 @@ import { BotBrain, botName, isBotId, newBotId, type BotLevel } from "./bot.ts";
 
 // Niente lettere/cifre ambigue (0/O, 1/I/L).
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+/** Un comando non può prenotare un tick più lontano di così: oltre è un orologio sballato. */
+const MAX_INPUT_AHEAD = 2 * TICK_RATE;
+/** Comandi in attesa per giocatore: un client onesto ne ha pochi in volo. */
+const MAX_QUEUED_INPUTS = 32;
 
 export class Room {
   readonly state: GameState = createState();
@@ -21,6 +26,8 @@ export class Room {
   botLevel: BotLevel = "medium";
   private events: GameEvent[] = [];
   private bots = new Map<string, BotBrain>();
+  /** Comandi arrivati in anticipo, ognuno col tick da cui vale. */
+  private queued = new Map<string, { tick: number; input: Input }[]>();
 
   constructor(
     readonly code: string,
@@ -55,6 +62,7 @@ export class Room {
   /** Rimuove il giocatore; se era l'host passa il ruolo a un'altra persona. */
   remove(id: string) {
     removePlayer(this.state, id);
+    this.queued.delete(id);
     if (this.hostId === id) {
       const people = this.state.players.filter((p) => !this.bots.has(p.id));
       const next = people.find((p) => !p.away) ?? people[0];
@@ -87,6 +95,22 @@ export class Room {
     return counts;
   }
 
+  /** Il comando vale dal tick `tick` (il client lo sta già mostrando); senza tick, o in ritardo, dal prossimo. */
+  queueInput(id: string, input: Input, tick: unknown) {
+    const next = this.state.tick + 1;
+    const at = Number.isInteger(tick) ? Math.min(Math.max(tick as number, next), next + MAX_INPUT_AHEAD) : next;
+    const queue = this.queued.get(id) ?? [];
+    // I comandi arrivano in ordine: uno con un tick precedente sostituisce quelli dopo.
+    while (queue.length && queue.at(-1)!.tick >= at) queue.pop();
+    queue.push({ tick: at, input });
+    if (queue.length > MAX_QUEUED_INPUTS) queue.shift();
+    this.queued.set(id, queue);
+  }
+
+  clearInputs(id: string) {
+    this.queued.delete(id);
+  }
+
   isBot(id: string) {
     return this.bots.has(id);
   }
@@ -97,6 +121,15 @@ export class Room {
 
   /** Avanza di un tick. Restituisce true se la partita è appena finita. */
   tick() {
+    const next = this.state.tick + 1;
+    for (const [id, queue] of this.queued) {
+      const p = this.player(id);
+      while (queue.length && queue[0].tick <= next) {
+        const { input } = queue.shift()!;
+        if (p) p.input = input;
+      }
+      if (!queue.length) this.queued.delete(id);
+    }
     for (const brain of this.bots.values()) {
       const p = this.player(brain.id);
       if (p) brain.update(this.state, p);
@@ -137,25 +170,31 @@ export class Room {
 
   snapshot(): Snapshot {
     const s = this.state;
+    const { ball } = s;
     const snap: Snapshot = {
       t: "snap",
       tick: s.tick,
-      ball: [round(s.ball.x), round(s.ball.y)],
+      ball: [round(ball.x), round(ball.y), roundV(ball.vx), roundV(ball.vy)],
       players: s.players.map((p) => ({
         id: p.id,
         name: p.name,
         team: p.team,
         x: round(p.x),
         y: round(p.y),
-        k: p.input.kick,
+        vx: roundV(p.vx),
+        vy: roundV(p.vy),
+        i: [p.input.mx, p.input.my, p.input.kick ? 1 : 0],
+        pk: p.prevKick,
+        ka: p.kickArmed,
         away: p.away,
         bot: this.bots.has(p.id),
       })),
       score: [s.score.red, s.score.blue],
       match: s.match,
       phase: s.phase,
+      phaseTimer: s.phaseTimer,
       kickoffTeam: s.kickoffTeam,
-      time: Math.ceil(s.timeLeft / TICK_RATE),
+      timeLeft: s.timeLeft,
       golden: s.golden,
       events: this.events,
     };
@@ -173,3 +212,5 @@ export function newCode(taken: (code: string) => boolean) {
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
+/** Le velocità sono piccole (unità/tick): servono più decimali perché la predizione non devii. */
+const roundV = (n: number) => Math.round(n * 1000) / 1000;

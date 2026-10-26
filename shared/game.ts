@@ -1,5 +1,5 @@
-// Simulazione condivisa: gira sul server (autoritativo) ed è pensata per
-// poter girare identica anche sul client (predizione, in futuro).
+// Simulazione condivisa: gira sul server (autoritativo) e
+// gira identica anche sul client, che la simula in anticipo (`client/predict.ts`).
 // Unità: velocità in unità/tick, a TICK_RATE tick al secondo.
 // Coordinate di gioco: x lungo il campo, y lungo la larghezza (in 3D diventa z).
 

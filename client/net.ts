@@ -1,12 +1,22 @@
 import { TICK_RATE, type GameEvent } from "../shared/game.ts";
 import type { ClientMessage, RoomInfo, RoomSummary, ServerMessage, Snapshot } from "../shared/protocol.ts";
 import { t } from "./i18n.ts";
+import type { InputTuple } from "./input.ts";
+import { Predictor, type RenderState } from "./predict.ts";
 
-/** Ritardo di rendering rispetto all'ultimo stato ricevuto, in tick. */
-const INTERP_TICKS = 3;
+export type { RenderPlayer, RenderState } from "./predict.ts";
+
 const TICKS_PER_MS = TICK_RATE / 1000;
-
-export type RenderState = Omit<Snapshot, "t" | "tick" | "ball" | "events"> & { ball: { x: number; y: number } };
+/**
+ * Il client mostra la partita in anticipo sul server di quanto serve ai suoi comandi
+ * per arrivare in tempo: il ritardo misurato dai ping (il peggiore degli ultimi),
+ * più questo margine in tick.
+ */
+const LEAD_MARGIN = 1;
+const LEAD_SAMPLES = 10;
+const LEAD_START = 6;
+/** Di quanto l'anticipo può correggere la velocità del tempo mostrato, per non dare scatti. */
+const LEAD_SLEW = 0.1;
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 
@@ -24,15 +34,21 @@ export class NetClient {
 
   private ws: WebSocket | null = null;
   private token = sessionToken();
-  private snaps: Snapshot[] = [];
+  private predictor = new Predictor();
   private events: GameEvent[] = [];
+  /** Tick del server ≈ ora × TICK_RATE + offset, misurato sugli snapshot arrivati prima. */
   private clockOffset: number | null = null;
+  private lead = LEAD_START;
+  private leadSamples: number[] = [];
+  /** Il tick (frazionario) mostrato all'ultimo frame. */
+  private shownTick: number | null = null;
+  private shownAt = 0;
   private retry = 0;
-  private lastInput: ClientMessage | null = null;
+  private lastInput: InputTuple | null = null;
 
   constructor() {
     this.open();
-    setInterval(() => this.send({ t: "ping", c: performance.now() }), 2000);
+    setInterval(() => this.send({ t: "ping", c: performance.now() }), 1000);
   }
 
   private open() {
@@ -59,8 +75,18 @@ export class NetClient {
     this.onStatus(s);
   }
 
+  /** I comandi valgono dal prossimo tick mostrato: il client li simula subito, il server a quel tick. */
+  input(i: InputTuple) {
+    this.lastInput = i;
+    let k: number | undefined;
+    if (this.room && this.shownTick !== null) {
+      k = Math.floor(this.shownTick) + 1;
+      this.predictor.record(k, { mx: i[0], my: i[1], kick: i[2] === 1 });
+    }
+    this.send({ t: "input", i, k });
+  }
+
   send(msg: ClientMessage) {
-    if (msg.t === "input") this.lastInput = msg;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 
@@ -76,10 +102,8 @@ export class NetClient {
         return this.onRooms(msg.rooms, msg.network);
       case "joined":
         this.room = msg.room;
-        this.snaps = [];
-        this.events = [];
-        this.clockOffset = null;
-        if (this.lastInput) this.send(this.lastInput);
+        this.resetTiming();
+        if (this.lastInput) this.input(this.lastInput);
         return this.onRoom(msg.room);
       case "room":
         this.room = msg.room;
@@ -91,6 +115,7 @@ export class NetClient {
         return this.onError(t(`error.${msg.code}`));
       case "pong":
         this.ping = Math.round(performance.now() - msg.c);
+        if (msg.a !== undefined && this.clockOffset !== null) this.measureLead(msg.a + 1 - (msg.c * TICKS_PER_MS + this.clockOffset));
         return;
       case "snap":
         return this.receiveSnapshot(msg);
@@ -102,53 +127,58 @@ export class NetClient {
     const room = this.room;
     if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
     this.rejoinTimer = setTimeout(() => {
-      if (this.room === room && this.snaps.length === 0) {
+      if (this.room === room && !this.predictor.ready) {
         this.room = null;
         this.onRoom(null);
         this.onError(t("conn.roomGone"));
       }
     }, 1500);
-    this.snaps = [];
+    this.resetTiming();
+  }
+
+  private resetTiming() {
+    this.predictor.reset();
+    this.events = [];
+    this.clockOffset = null;
+    this.shownTick = null;
+    // Le misure sono relative all'orologio della stanza: con una stanza nuova non valgono più.
+    this.leadSamples = [];
+  }
+
+  /** `late`: quanti tick dopo il nostro orologio è arrivato un ping al server. */
+  private measureLead(late: number) {
+    this.leadSamples.push(late);
+    if (this.leadSamples.length > LEAD_SAMPLES) this.leadSamples.shift();
+    this.lead = Math.min(2 * TICK_RATE, Math.max(1, Math.max(...this.leadSamples) + LEAD_MARGIN));
   }
 
   private receiveSnapshot(msg: Snapshot) {
-    // Stima del tick del server sul nostro orologio, smussata contro il jitter.
-    const target = msg.tick - performance.now() * TICKS_PER_MS;
-    if (this.clockOffset === null || Math.abs(target - this.clockOffset) > 30) {
-      this.clockOffset = target;
-    } else {
-      this.clockOffset += (target - this.clockOffset) * 0.05;
-    }
-    this.snaps.push(msg);
+    // Si segue lo snapshot arrivato prima: quelli rallentati dal jitter non devono
+    // spostare l'orologio. Scende piano, nel caso il server rallenti davvero.
+    const estimate = msg.tick - performance.now() * TICKS_PER_MS;
+    if (this.clockOffset === null || Math.abs(estimate - this.clockOffset) > 2 * TICK_RATE) this.clockOffset = estimate;
+    else if (estimate > this.clockOffset) this.clockOffset = estimate;
+    else this.clockOffset += (estimate - this.clockOffset) * 0.01;
+    this.predictor.receive(msg);
     this.events.push(...msg.events);
   }
 
-  /** Stato interpolato da mostrare adesso. Gli eventi escono in sync con l'immagine. */
-  sample(now: number): RenderState | null {
-    if (this.snaps.length === 0 || this.clockOffset === null) return null;
-    const renderTick = now * TICKS_PER_MS + this.clockOffset - INTERP_TICKS;
-
-    while (this.snaps.length > 2 && this.snaps[1].tick <= renderTick) this.snaps.shift();
-    while (this.events.length && this.events[0].tick <= renderTick) this.onEvent(this.events.shift()!);
-
-    const a = this.snaps[0];
-    const b = this.snaps[1];
-    if (!b || renderTick <= a.tick) return fromSnap(a);
-    const t = Math.min(1, (renderTick - a.tick) / (b.tick - a.tick));
-    const prev = new Map(a.players.map((p) => [p.id, p]));
-    return {
-      ...fromSnap(b),
-      ball: { x: lerp(a.ball[0], b.ball[0], t), y: lerp(a.ball[1], b.ball[1], t) },
-      players: b.players.map((p) => {
-        const q = prev.get(p.id);
-        return q ? { ...p, x: lerp(q.x, p.x, t), y: lerp(q.y, p.y, t) } : p;
-      }),
-    };
+  /** Stato da mostrare adesso, simulato in anticipo. Gli eventi escono quando arrivano. */
+  sample(now: number, dt: number): RenderState | null {
+    while (this.events.length) this.onEvent(this.events.shift()!);
+    if (this.clockOffset === null) return null;
+    const ideal = now * TICKS_PER_MS + this.clockOffset + this.lead;
+    if (this.shownTick === null || Math.abs(ideal - this.shownTick) > TICK_RATE) {
+      this.shownTick = ideal;
+    } else {
+      // Il tempo mostrato non torna mai indietro: si avvicina all'ideale andando un po' più piano o più veloce.
+      const elapsed = (now - this.shownAt) * TICKS_PER_MS;
+      const natural = this.shownTick + elapsed;
+      this.shownTick = natural + Math.max(-LEAD_SLEW * elapsed, Math.min(LEAD_SLEW * elapsed, ideal - natural));
+    }
+    this.shownAt = now;
+    return this.predictor.sample(this.shownTick, this.id, dt);
   }
-}
-
-function fromSnap({ t: _t, tick: _tick, events: _e, ball, ...rest }: Snapshot): RenderState {
-  return { ...rest, ball: { x: ball[0], y: ball[1] } };
 }
 
 /** Un token per scheda: più schede = più giocatori, ma un reload riprende il posto. */
@@ -161,5 +191,3 @@ function sessionToken() {
   }
   return token;
 }
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;

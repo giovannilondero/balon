@@ -29,7 +29,7 @@ document.body.classList.toggle("touch", touch);
 const scene = new GameScene($("game"));
 const net = new NetClient();
 const controls = new Controls(
-  (i) => net.send({ t: "input", i }),
+  (i) => net.input(i),
   () => net.send({ t: "team" }),
 );
 if (touch) setupTouch($("touch"), controls);
@@ -109,7 +109,7 @@ let prev = performance.now();
 function frame(now: number) {
   const dt = Math.min(0.1, (now - prev) / 1000);
   prev = now;
-  const state = (net.room && net.sample(now)) || IDLE;
+  const state = (net.room && net.sample(now, dt)) || IDLE;
   names = new Map(state.players.map((p) => [p.id, p]));
   if (net.room) hud.update(state, net.room, net.id);
   if (state.match !== "ended") endedAt = null;
