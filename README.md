@@ -1,52 +1,57 @@
 # Balón
 
-Calcio a dischi multiplayer nel browser, con vista inclinata in 3D.
+Multiplayer disc football in the browser, with a tilted 3D view.
 
-## Avvio
+## Getting started
 
 ```sh
 pnpm install
-pnpm dev      # server di gioco su :3001 + Vite su :5173
+pnpm dev      # game server on :3001 + Vite on :5173
 ```
 
-Apri http://localhost:5173 (più schede = più giocatori; sulla stessa rete funziona anche con l'IP della macchina).
+Open http://localhost:5173 (more tabs = more players; on the same network it also works with the machine's IP).
 
-## Partite
+## Matches
 
-- **Rete locale**: elencata e accessibile solo a chi è sulla stessa rete di chi l'ha creata
-  (stesso IP pubblico visto dal server; se il server gira in LAN, tutti gli IP privati contano come stessa rete).
-- **Online con codice**: non elencata, si entra con il codice di 4 lettere o col link d'invito (`?p=CODICE`).
+- **Local network**: listed for, and joinable only by, people on the same network as whoever created it
+  (same public IP as seen by the server; if the server runs on a LAN, every private IP counts as the same network).
+- **Online with code**: not listed; you join with the 4-letter code or the invite link (`?p=CODE`).
 
-Chi crea la partita è l'host: sceglie la durata e la avvia, e può aggiungere giocatori CPU
-a ciascuna squadra (Facile, Medio, Difficile). "Gioca contro la CPU" nella home crea una partita privata contro un bot;
-se una stanza è piena, una persona che entra prende il posto di un bot. A tempo scaduto in parità si va al golden goal.
-A fine partita il gioco si ferma e compare il riepilogo (marcatori, possesso, statistiche, MVP);
-l'host sceglie tra rivincita e riscaldamento. Se nessuno batte il calcio d'inizio entro 5 secondi, si gioca comunque.
-Se cadi (reload, app in background, rete) hai 20 secondi per rientrare al tuo posto.
-Dalla home si può installare come app (PWA): pulsante "Installa" dove il browser lo supporta
-(serve HTTPS o localhost), istruzioni da Condividi su iOS.
+Whoever creates the match is the host: they pick the length, start it, and can add CPU players
+to either team (Easy, Medium, Hard). "Play against the CPU" on the home screen creates a private match against a bot;
+if a room is full, a person who joins takes a bot's place. A draw at full time goes to golden goal.
+When the match ends, play stops and a summary appears (scorers, possession, stats, MVP);
+the host chooses between a rematch and warm-up. If nobody takes the kick-off within 5 seconds, play starts anyway.
+A name is required to join. Once the match has started you can only switch teams to rebalance them (see Controls).
+If you drop out (reload, app in the background, network) you have 20 seconds to get your spot back.
 
-Dietro un reverse proxy imposta `TRUST_PROXY=1`, così il server legge l'IP reale da `X-Forwarded-For`.
+The home screen can install the game as an app (PWA): an "Install" button where the browser supports it
+(it needs HTTPS or localhost), and Share-menu instructions on iOS.
 
-Build unica servita dal server di gioco:
+The UI is available in Italian and English: it follows the browser language (English by default),
+and there is a switcher at the bottom of the home screen. Strings live in `client/i18n.ts`.
+
+Behind a reverse proxy, set `TRUST_PROXY=1` so the server reads the real IP from `X-Forwarded-For`.
+
+Single build served by the game server:
 
 ```sh
 pnpm build && pnpm start   # http://localhost:3001
 ```
 
-## Comandi
+## Controls
 
-- **WASD / frecce**: muovi
-- **Spazio / X**: calcia (tienilo premuto e il calcio parte al contatto)
-- **T**: cambia squadra (a partita iniziata solo se la tua ha almeno 2 giocatori in più dell'altra, senza contare chi è offline)
-- **Mobile**: stick a sinistra (appare dove appoggi il pollice), pulsante CALCIA a destra
+- **WASD / arrows**: move
+- **Space / X**: kick (hold it and the kick fires on contact)
+- **T**: switch team (once the match has started, only if your team has at least 2 more players than the other, not counting players who are offline)
+- **Mobile**: stick on the left (it appears where you put your thumb), KICK button on the right
 
-## Struttura
+## Structure
 
-- `shared/game.ts`: simulazione a passo fisso (60 tick/s), fisica dei dischi, calcio, gol
-- `shared/protocol.ts`: messaggi client ↔ server
-- `server/index.ts`: server Bun autoritativo via WebSocket, sessioni e riconnessione
-- `server/rooms.ts`, `server/network.ts`: stanze e riconoscimento della rete del client
-- `server/bot.ts`: giocatori CPU; producono lo stesso input di un umano (stick + calcio)
-- `client/`: rendering Three.js, interpolazione degli snapshot, lobby, HUD, input tastiera/touch, audio sintetizzato
-- `scripts/icons.ts`: genera favicon e icone PWA in `client/public/` (`pnpm icons`)
+- `shared/game.ts`: fixed-step simulation (60 ticks/s), disc physics, kicking, goals
+- `shared/protocol.ts`: client ↔ server messages
+- `server/index.ts`: authoritative Bun server over WebSocket, sessions and reconnection
+- `server/rooms.ts`, `server/network.ts`: rooms and detecting the client's network
+- `server/bot.ts`: CPU players; they produce the same input as a human (stick + kick)
+- `client/`: Three.js rendering, snapshot interpolation, lobby, HUD, keyboard/touch input, synthesized audio, i18n
+- `scripts/icons.ts`: generates the favicon and PWA icons in `client/public/` (`pnpm icons`)
