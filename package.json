@@ -1,6 +1,7 @@
 {
   "name": "balon",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n server,client -c yellow,cyan \"bun --watch server/index.ts\" \"vite\"",

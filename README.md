@@ -55,3 +55,7 @@ pnpm build && pnpm start   # http://localhost:3001
 - `server/bot.ts`: CPU players; they produce the same input as a human (stick + kick)
 - `client/`: Three.js rendering, snapshot interpolation, lobby, HUD, keyboard/touch input, synthesized audio, i18n
 - `scripts/icons.ts`: generates the favicon and PWA icons in `client/public/` (`pnpm icons`)
+
+## License
+
+[MIT](LICENSE)
