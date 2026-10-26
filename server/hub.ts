@@ -9,6 +9,8 @@ import { newCode, Room } from "./rooms.ts";
 /** Quanto teniamo il posto a chi si disconnette (app in background, rete ballerina). */
 const GRACE_MS = 20_000;
 const DT = 1000 / TICK_RATE;
+/** Il messaggio più lungo del client sta ben sotto: oltre è spazzatura o un attacco. */
+const MESSAGE_MAX = 1024;
 
 /** Un browser connesso, qualunque sia il server che lo regge. */
 export interface Peer {
@@ -34,12 +36,15 @@ export class Hub {
   private loop: ReturnType<typeof setInterval> | null = null;
 
   message(ws: Peer, raw: string) {
+    if (raw.length > MESSAGE_MAX) return;
     let msg: ClientMessage;
     try {
       msg = JSON.parse(raw);
     } catch {
       return;
     }
+    // JSON valido non vuol dire un oggetto: con `null` leggere `msg.t` farebbe crollare il server.
+    if (typeof msg !== "object" || msg === null) return;
     if (msg.t === "hello") return this.hello(ws, String(msg.token ?? ""));
     if (msg.t === "ping") return send(ws, { t: "pong", c: Number(msg.c) });
     const session = ws.session;
@@ -139,6 +144,9 @@ export class Hub {
   }
 
   private hello(ws: Peer, token: string) {
+    // Un hello per connessione (il client lo manda solo all'apertura): cambiando token
+    // una connessione sola terrebbe in vita sessioni, e stanze con i loro bot, senza limite.
+    if (ws.session) return;
     if (token.length < 16 || token.length > 64) return send(ws, { t: "error", code: "bad-token" });
     let session = this.sessions.get(token);
     if (session) {
