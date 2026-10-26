@@ -4,6 +4,7 @@ import { Controls } from "./input.ts";
 import { isTouchDevice, setupTouch } from "./touch.ts";
 import { Lobby } from "./lobby.ts";
 import { Hud } from "./hud.ts";
+import { SummaryView } from "./summary.ts";
 import { $, toast } from "./dom.ts";
 import { playGoal, playKick, playPost, playWhistle, unlockAudio } from "./audio.ts";
 
@@ -39,9 +40,12 @@ const lobby = new Lobby(net, () => {
       .catch(() => {});
   }
 });
-const hud = new Hud(net, () => {
-  net.send({ t: "leave" });
-});
+const leave = () => net.send({ t: "leave" });
+const hud = new Hud(net, leave);
+const summary = new SummaryView(net, leave);
+/** Quando è finita la partita: il riepilogo arriva dopo un attimo, per vedere il fischio finale. */
+let endedAt: number | null = null;
+const SUMMARY_DELAY_MS = 1300;
 
 lobby.show();
 
@@ -55,7 +59,6 @@ net.onError = (message) => toast(message);
 net.onRoom = (room) => {
   const playing = room !== null;
   document.body.classList.toggle("playing", playing);
-  $("touch").hidden = !(playing && touch);
   controls.enabled = playing;
   if (!playing) controls.reset();
   if (room) {
@@ -92,7 +95,7 @@ net.onEvent = (e) => {
       hud.golden();
       return playWhistle(2);
     case "end":
-      hud.end(e.winner);
+      endedAt = performance.now();
       return playWhistle(3);
   }
 };
@@ -104,6 +107,11 @@ function frame(now: number) {
   const state = (net.room && net.sample(now)) || IDLE;
   names = new Map(state.players.map((p) => [p.id, p]));
   if (net.room) hud.update(state, net.room, net.id);
+  if (state.match !== "ended") endedAt = null;
+  // Se rientri in una partita già finita endedAt è null: riepilogo subito.
+  const showSummary = net.room !== null && state.match === "ended" && (endedAt === null || now - endedAt > SUMMARY_DELAY_MS);
+  summary.update(showSummary, net.room, net.id);
+  $("touch").hidden = !(net.room && touch && !showSummary);
   scene.update(state, net.id, dt);
   requestAnimationFrame(frame);
 }

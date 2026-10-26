@@ -1,7 +1,7 @@
 import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { MATCH_MINUTES, MAX_PLAYERS, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
+import { backToWarmup, MATCH_MINUTES, MAX_PLAYERS, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
 import type { BotLevel, ClientMessage, RoomKind, ServerMessage } from "../shared/protocol.ts";
 import { networkOf, type NetworkId } from "./network.ts";
 import { BOT_LEVELS } from "./bot.ts";
@@ -91,6 +91,12 @@ const server = Bun.serve<SocketData>({
           room.push({ type: "start", tick: room.state.tick + 1 });
           return broadcastRoom(room);
         }
+        case "warmup": {
+          const room = session.room;
+          if (!room || room.hostId !== session.id || room.state.match !== "ended") return;
+          backToWarmup(room.state);
+          return broadcastRoom(room);
+        }
         case "bot": {
           const room = session.room;
           if (!room || room.hostId !== session.id || (msg.team !== "red" && msg.team !== "blue")) return;
@@ -152,6 +158,7 @@ function hello(ws: Socket, token: string) {
 
 function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number, cpu?: BotLevel) {
   const name = cleanName(rawName);
+  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
   const room = new Room(
     newCode((c) => rooms.has(c)),
     `Partita di ${name}`,
@@ -179,7 +186,9 @@ function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: stri
   }
   if (session.room === room) return send(ws, { t: "joined", room: room.info() });
   if (room.humans >= MAX_PLAYERS) return send(ws, { t: "error", message: "La partita è piena." });
-  enter(ws, session, room, cleanName(rawName));
+  const name = cleanName(rawName);
+  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
+  enter(ws, session, room, name);
 }
 
 function enter(ws: Socket, session: Session, room: Room, name: string) {
@@ -224,8 +233,10 @@ function send(ws: Socket, msg: ServerMessage) {
   ws.send(JSON.stringify(msg));
 }
 
+const NAME_REQUIRED = "Scrivi il tuo nome per entrare in partita.";
+
 function cleanName(raw: unknown) {
-  return String(raw ?? "").trim().slice(0, 16) || "Giocatore";
+  return String(raw ?? "").trim().slice(0, 16);
 }
 
 function clampAxis(n: unknown) {
@@ -244,7 +255,7 @@ setInterval(() => {
   while (acc >= DT) {
     acc -= DT;
     for (const room of rooms.values()) {
-      room.tick();
+      if (room.tick()) broadcastRoom(room);
       server.publish(room.topic, JSON.stringify(room.snapshot()));
     }
   }

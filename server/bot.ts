@@ -189,6 +189,17 @@ function rotate(x: number, y: number, a: number): [number, number] {
   return [x * c - y * s, x * s + y * c];
 }
 
+const BOT_ID_PREFIX = "cpu-";
+
+export function newBotId() {
+  return `${BOT_ID_PREFIX}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Vale anche per bot già rimossi dalla stanza (es. nel riepilogo di fine partita). */
+export function isBotId(id: string) {
+  return id.startsWith(BOT_ID_PREFIX);
+}
+
 export function botName(team: Team, n: number) {
   return `CPU ${team === "red" ? "R" : "B"}${n}`;
 }

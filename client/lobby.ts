@@ -1,7 +1,7 @@
 import { MATCH_MINUTES } from "../shared/game.ts";
 import { BOT_LEVELS, type BotLevel, type RoomKind, type RoomSummary } from "../shared/protocol.ts";
 import type { NetClient } from "./net.ts";
-import { $, chips } from "./dom.ts";
+import { $, chips, toast } from "./dom.ts";
 
 export const LEVEL_LABEL: Record<BotLevel, string> = { easy: "Facile", medium: "Medio", hard: "Difficile" };
 
@@ -21,8 +21,11 @@ export class Lobby {
     private beforeJoin: () => void,
   ) {
     const name = $<HTMLInputElement>("name");
-    name.value = localStorage.getItem("balon:name") ?? "";
+    // "Giocatore" era il nome di ripiego delle versioni precedenti: va scelto di nuovo.
+    const saved = localStorage.getItem("balon:name") ?? "";
+    name.value = saved === "Giocatore" ? "" : saved;
     name.addEventListener("change", () => localStorage.setItem("balon:name", name.value.trim()));
+    name.addEventListener("input", () => name.classList.remove("missing"));
 
     const kind = $("kind");
     kind.addEventListener("click", (e) => {
@@ -37,14 +40,18 @@ export class Lobby {
     chips($("minutes"), MATCH_MINUTES, this.minutes, (m) => `${m} min`, (m) => (this.minutes = m));
 
     $("create").addEventListener("click", () => {
+      const name = this.name();
+      if (!name) return;
       this.beforeJoin();
-      net.send({ t: "create", name: this.name(), kind: this.kind, minutes: this.minutes });
+      net.send({ t: "create", name, kind: this.kind, minutes: this.minutes });
     });
     chips($("cpu-level"), BOT_LEVELS, this.cpuLevel, (l) => LEVEL_LABEL[l], (l) => (this.cpuLevel = l));
     $("vs-cpu").addEventListener("click", () => {
+      const name = this.name();
+      if (!name) return;
       this.beforeJoin();
       // Online = non compare nella lista della rete: è una partita solo tua.
-      net.send({ t: "create", name: this.name(), kind: "online", minutes: this.minutes, cpu: this.cpuLevel });
+      net.send({ t: "create", name, kind: "online", minutes: this.minutes, cpu: this.cpuLevel });
     });
     $("join-code").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -60,15 +67,25 @@ export class Lobby {
     }
   }
 
+  /** Il nome è obbligatorio: senza, segnala il campo e restituisce null. */
   private name() {
-    const name = $<HTMLInputElement>("name").value.trim() || "Giocatore";
+    const input = $<HTMLInputElement>("name");
+    const name = input.value.trim();
+    if (!name) {
+      input.classList.add("missing");
+      input.focus();
+      toast("Scrivi il tuo nome per entrare in partita.");
+      return null;
+    }
     localStorage.setItem("balon:name", name);
     return name;
   }
 
   join(code: string) {
+    const name = this.name();
+    if (!name) return;
     this.beforeJoin();
-    this.net.send({ t: "join", name: this.name(), code });
+    this.net.send({ t: "join", name, code });
   }
 
   show() {

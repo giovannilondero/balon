@@ -20,6 +20,8 @@ Apri http://localhost:5173 (più schede = più giocatori; sulla stessa rete funz
 Chi crea la partita è l'host: sceglie la durata e la avvia, e può aggiungere giocatori CPU
 a ciascuna squadra (Facile, Medio, Difficile). "Gioca contro la CPU" nella home crea una partita privata contro un bot;
 se una stanza è piena, una persona che entra prende il posto di un bot. A tempo scaduto in parità si va al golden goal.
+A fine partita il gioco si ferma e compare il riepilogo (marcatori, possesso, statistiche, MVP);
+l'host sceglie tra rivincita e riscaldamento. Se nessuno batte il calcio d'inizio entro 5 secondi, si gioca comunque.
 Se cadi (reload, app in background, rete) hai 20 secondi per rientrare al tuo posto.
 
 Dietro un reverse proxy imposta `TRUST_PROXY=1`, così il server legge l'IP reale da `X-Forwarded-For`.

@@ -23,7 +23,7 @@
 
         <label class="field">
           <span>Il tuo nome</span>
-          <input id="name" placeholder="Giocatore" maxlength="16" autocomplete="off" />
+          <input id="name" placeholder="Come ti chiami?" maxlength="16" autocomplete="off" required />
         </label>
 
         <section id="invite" hidden>
@@ -112,6 +112,40 @@
 
       <div id="help">
         <kbd>WASD</kbd>/<kbd>frecce</kbd> muovi · <kbd>Spazio</kbd> calcia · <kbd>T</kbd> cambia squadra
+      </div>
+    </div>
+
+    <div id="summary" hidden>
+      <div class="card">
+        <p class="eyebrow" id="sum-eyebrow"></p>
+        <h2 id="sum-title"></h2>
+        <div class="sum-score">
+          <span class="team red">ROSSI</span>
+          <strong id="sum-red"></strong>
+          <span class="sep">–</span>
+          <strong id="sum-blue"></strong>
+          <span class="team blue">BLU</span>
+        </div>
+        <div class="possession">
+          <div class="bar"><div id="pos-red"></div></div>
+          <div class="labels"><span id="pos-red-label"></span><span>Possesso palla</span><span id="pos-blue-label"></span></div>
+        </div>
+        <div class="sum-goals">
+          <ul id="goals-red"></ul>
+          <ul id="goals-blue"></ul>
+        </div>
+        <table id="sum-players">
+          <thead>
+            <tr><th>Giocatore</th><th>Gol</th><th>Tiri</th><th>Tocchi</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="sum-actions">
+          <button id="sum-rematch" class="primary">Rivincita</button>
+          <button id="sum-warmup">Riscaldamento</button>
+          <p id="sum-wait" class="muted"></p>
+          <button id="sum-leave">Esci</button>
+        </div>
       </div>
     </div>
 
