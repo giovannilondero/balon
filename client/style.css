@@ -20,6 +20,8 @@ html, body {
   font-family: system-ui, -apple-system, sans-serif;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+  /* Niente zoom da doppio tap (Safari ignora user-scalable=no). */
+  touch-action: manipulation;
 }
 
 [hidden] { display: none !important; }
@@ -425,7 +427,8 @@ kbd {
 
 /* ---------- Touch ---------- */
 
-#touch { position: fixed; inset: 0; pointer-events: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+#touch { position: fixed; inset: 0; pointer-events: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+#touch * { touch-action: none; }
 #stick-zone {
   position: absolute;
   top: 25%;
