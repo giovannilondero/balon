@@ -1,6 +1,14 @@
+<img src="client/public/favicon.svg" alt="" width="96" align="right">
+
 # Balón
 
 Multiplayer disc football in the browser, with a tilted 3D view.
+
+![A goal in a 3v3 match against the CPU](docs/gameplay.gif)
+
+| Home | Match | Full time |
+| --- | --- | --- |
+| ![Home screen](docs/home.png) | ![Match in progress](docs/match.png) | ![End-of-match summary](docs/summary.png) |
 
 ## Getting started
 
