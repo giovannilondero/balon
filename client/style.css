@@ -117,6 +117,7 @@ kbd {
 .field { display: grid; gap: 6px; font-size: 13px; }
 .field span { opacity: 0.7; }
 .field input { font-size: 17px; }
+.field input.missing { outline-color: var(--red); }
 
 #invite {
   padding: 14px;

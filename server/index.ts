@@ -158,6 +158,7 @@ function hello(ws: Socket, token: string) {
 
 function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number, cpu?: BotLevel) {
   const name = cleanName(rawName);
+  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
   const room = new Room(
     newCode((c) => rooms.has(c)),
     `Partita di ${name}`,
@@ -185,7 +186,9 @@ function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: stri
   }
   if (session.room === room) return send(ws, { t: "joined", room: room.info() });
   if (room.humans >= MAX_PLAYERS) return send(ws, { t: "error", message: "La partita è piena." });
-  enter(ws, session, room, cleanName(rawName));
+  const name = cleanName(rawName);
+  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
+  enter(ws, session, room, name);
 }
 
 function enter(ws: Socket, session: Session, room: Room, name: string) {
@@ -230,8 +233,10 @@ function send(ws: Socket, msg: ServerMessage) {
   ws.send(JSON.stringify(msg));
 }
 
+const NAME_REQUIRED = "Scrivi il tuo nome per entrare in partita.";
+
 function cleanName(raw: unknown) {
-  return String(raw ?? "").trim().slice(0, 16) || "Giocatore";
+  return String(raw ?? "").trim().slice(0, 16);
 }
 
 function clampAxis(n: unknown) {
