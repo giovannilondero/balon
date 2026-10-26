@@ -1,0 +1,21 @@
+// The Cloudflare deploy: the built client as static assets, the matches in a Durable Object (`server/worker.ts`).
+// No account or domain here: CI passes them (see `.github/workflows/ci.yml`), so a fork deploys to its own account.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "balon",
+  "main": "server/worker.ts",
+  "compatibility_date": "2026-10-19",
+  "assets": {
+    "directory": "./dist",
+    // Every unknown path is the game, as on the Bun server.
+    "not_found_handling": "single-page-application",
+    // Only the game socket reaches the Worker; static files never do, and stay free.
+    "run_worker_first": ["/ws"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "MATCHES", "class_name": "Matches" }]
+  },
+  // The Free plan only has SQLite-backed Durable Objects; the matches store nothing anyway.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Matches"] }],
+  "observability": { "enabled": true }
+}

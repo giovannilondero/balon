@@ -50,7 +50,8 @@ pnpm build && pnpm start   # http://localhost:3001
 
 - `shared/game.ts`: fixed-step simulation (60 ticks/s), disc physics, kicking, goals
 - `shared/protocol.ts`: client ↔ server messages
-- `server/index.ts`: authoritative Bun server over WebSocket, sessions and reconnection
+- `server/hub.ts`: authoritative game server, independent of the transport: rooms, sessions and reconnection, the fixed-step loop
+- `server/index.ts`: serves the hub with Bun (development, self-hosting); `server/worker.ts`: the same hub on Cloudflare
 - `server/rooms.ts`, `server/network.ts`: rooms and detecting the client's network
 - `server/bot.ts`: CPU players; they produce the same input as a human (stick + kick)
 - `client/`: Three.js rendering, snapshot interpolation, lobby, HUD, keyboard/touch input, synthesized audio, i18n
