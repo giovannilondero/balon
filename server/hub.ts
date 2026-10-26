@@ -9,6 +9,8 @@ import { newCode, Room } from "./rooms.ts";
 /** Quanto teniamo il posto a chi si disconnette (app in background, rete ballerina). */
 const GRACE_MS = 20_000;
 const DT = 1000 / TICK_RATE;
+/** Uno snapshot ogni due tick: tra l'uno e l'altro il client simula da sé. */
+const SNAPSHOT_EVERY = 2;
 /** Il messaggio più lungo del client sta ben sotto: oltre è spazzatura o un attacco. */
 const MESSAGE_MAX = 1024;
 
@@ -46,7 +48,7 @@ export class Hub {
     // JSON valido non vuol dire un oggetto: con `null` leggere `msg.t` farebbe crollare il server.
     if (typeof msg !== "object" || msg === null) return;
     if (msg.t === "hello") return this.hello(ws, String(msg.token ?? ""));
-    if (msg.t === "ping") return send(ws, { t: "pong", c: Number(msg.c) });
+    if (msg.t === "ping") return send(ws, { t: "pong", c: Number(msg.c), a: ws.session?.room?.state.tick });
     const session = ws.session;
     if (!session) return;
 
@@ -61,9 +63,9 @@ export class Hub {
         this.leave(session);
         return send(ws, { t: "left" });
       case "input": {
-        const p = session.room?.player(session.id);
-        if (p && Array.isArray(msg.i)) {
-          p.input = { mx: clampAxis(msg.i[0]), my: clampAxis(msg.i[1]), kick: msg.i[2] === 1 };
+        const room = session.room;
+        if (room?.player(session.id) && Array.isArray(msg.i)) {
+          room.queueInput(session.id, { mx: clampAxis(msg.i[0]), my: clampAxis(msg.i[1]), kick: msg.i[2] === 1 }, msg.k);
         }
         return;
       }
@@ -110,6 +112,7 @@ export class Hub {
     if (p) {
       p.away = true;
       p.input = NO_INPUT;
+      session.room?.clearInputs(session.id);
     }
     session.graceTimer = setTimeout(() => {
       this.leave(session);
@@ -133,14 +136,14 @@ export class Hub {
         acc -= DT;
         for (const room of this.rooms.values()) {
           if (room.tick()) this.broadcastRoom(room);
-          this.publish(room, JSON.stringify(room.snapshot()));
+          if (room.state.tick % SNAPSHOT_EVERY === 0) this.publish(room, JSON.stringify(room.snapshot()));
         }
       }
       if (this.sessions.size === 0 && this.rooms.size === 0 && this.loop) {
         clearInterval(this.loop);
         this.loop = null;
       }
-    }, 4);
+    }, DT / 2);
   }
 
   private hello(ws: Peer, token: string) {

@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { BALL, FIELD, PLAYER, type Team } from "../shared/game.ts";
-import type { SnapshotPlayer } from "../shared/protocol.ts";
-import type { RenderState } from "./net.ts";
+import type { RenderPlayer, RenderState } from "./net.ts";
 
 // Coordinate di gioco (x, y) -> mondo 3D (x, altezza, z = y). Stessa scala.
 
@@ -255,7 +254,7 @@ export class GameScene {
     this.ballPrev = { x: b.x, y: b.y };
   }
 
-  private updatePlayers(list: SnapshotPlayer[], meId: string | null) {
+  private updatePlayers(list: RenderPlayer[], meId: string | null) {
     const seen = new Set<string>();
     this.meMarker.visible = false;
     for (const p of list) {

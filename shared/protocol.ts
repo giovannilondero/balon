@@ -13,8 +13,11 @@ export type ClientMessage =
   | { t: "create"; name: string; kind: RoomKind; minutes: number; cpu?: BotLevel }
   | { t: "join"; name: string; code: string }
   | { t: "leave" }
-  /** [mx, my, kick] con mx, my in [-100, 100]. */
-  | { t: "input"; i: [number, number, 0 | 1] }
+  /**
+   * [mx, my, kick] con mx, my in [-100, 100]. k: il tick da cui vale, già simulato
+   * dal client in anticipo; il server lo applica a quel tick (o appena arriva, se è tardi).
+   */
+  | { t: "input"; i: [number, number, 0 | 1]; k?: number }
   | { t: "team" }
   | { t: "start"; minutes?: number }
   /** Solo host: chiude il riepilogo e torna al palleggio libero. */
@@ -47,14 +50,20 @@ export interface RoomInfo extends RoomSummary {
 
 export type MatchReport = Omit<MatchSummary, "players"> & { players: (PlayerStats & { bot: boolean })[] };
 
+/** Lo stato completo, velocità comprese: il client ci riparte per simulare in anticipo. */
 export interface SnapshotPlayer {
   id: string;
   name: string;
   team: Team;
   x: number;
   y: number;
-  /** Tasto calcio premuto. */
-  k: boolean;
+  vx: number;
+  vy: number;
+  /** Comandi in corso: [mx, my, kick]. */
+  i: [number, number, 0 | 1];
+  /** prevKick e kickArmed della simulazione. */
+  pk: boolean;
+  ka: boolean;
   away: boolean;
   bot: boolean;
 }
@@ -62,14 +71,16 @@ export interface SnapshotPlayer {
 export interface Snapshot {
   t: "snap";
   tick: number;
-  ball: [number, number];
+  /** [x, y, vx, vy] */
+  ball: [number, number, number, number];
   players: SnapshotPlayer[];
   score: [number, number];
   match: GameState["match"];
   phase: GameState["phase"];
+  phaseTimer: number;
   kickoffTeam: Team;
-  /** Secondi rimanenti. */
-  time: number;
+  /** Tick rimanenti. */
+  timeLeft: number;
   golden: boolean;
   events: GameEvent[];
 }
@@ -84,5 +95,6 @@ export type ServerMessage =
   | { t: "room"; room: RoomInfo }
   | { t: "left" }
   | { t: "error"; code: ErrorCode }
-  | { t: "pong"; c: number }
+  /** a: ultimo tick simulato dalla stanza all'arrivo del ping, per misurare quanto anticipare i comandi. */
+  | { t: "pong"; c: number; a?: number }
   | Snapshot;
