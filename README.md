@@ -39,6 +39,20 @@ Single build served by the game server:
 pnpm build && pnpm start   # http://localhost:3001
 ```
 
+## Deploying to Cloudflare
+
+In production the game runs on Cloudflare (`wrangler.jsonc`): the built client is served as static assets,
+and every match lives in a single Durable Object (`server/worker.ts`) running the same `Hub` as the Bun server.
+Nothing is stored, so a deploy ends the matches in progress.
+
+```sh
+pnpm serve:cloudflare   # the Worker and its Durable Object, locally: http://localhost:8787
+```
+
+CI (`.github/workflows/ci.yml`) checks every pull request and deploys every push to `main`. In the repository settings it needs
+the secrets `CLOUDFLARE_API_TOKEN` (an API token with the *Edit Cloudflare Workers* template) and `CLOUDFLARE_ACCOUNT_ID`,
+and the variable `DEPLOY_DOMAIN` (the custom domain, on a zone in that account). Without `DEPLOY_DOMAIN` nothing is deployed.
+
 ## Controls
 
 - **WASD / arrows**: move
@@ -50,7 +64,8 @@ pnpm build && pnpm start   # http://localhost:3001
 
 - `shared/game.ts`: fixed-step simulation (60 ticks/s), disc physics, kicking, goals
 - `shared/protocol.ts`: client ↔ server messages
-- `server/index.ts`: authoritative Bun server over WebSocket, sessions and reconnection
+- `server/hub.ts`: authoritative game server, independent of the transport: rooms, sessions and reconnection, the fixed-step loop
+- `server/index.ts`: serves the hub with Bun (development, self-hosting); `server/worker.ts`: the same hub on Cloudflare
 - `server/rooms.ts`, `server/network.ts`: rooms and detecting the client's network
 - `server/bot.ts`: CPU players; they produce the same input as a human (stick + kick)
 - `client/`: Three.js rendering, snapshot interpolation, lobby, HUD, keyboard/touch input, synthesized audio, i18n

@@ -34,10 +34,6 @@ export class Room {
     this.hostId = hostId;
   }
 
-  get topic() {
-    return `room:${this.code}`;
-  }
-
   get full() {
     return this.state.players.length >= MAX_PLAYERS;
   }

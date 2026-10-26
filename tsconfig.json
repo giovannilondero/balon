@@ -11,5 +11,7 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["shared", "server", "client", "vite.config.ts"]
+  "include": ["shared", "server", "client", "vite.config.ts"],
+  // Cloudflare's runtime, not the DOM nor Bun: checked by tsconfig.worker.json.
+  "exclude": ["server/worker.ts"]
 }
