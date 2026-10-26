@@ -78,6 +78,17 @@ export function setupTouch(root: HTMLElement, controls: Controls) {
   kick.addEventListener("pointerdown", kickDown);
   kick.addEventListener("pointerup", kickUp);
   kick.addEventListener("pointercancel", kickUp);
+
+  // Safari iOS ignora user-scalable=no e, con tap ripetuti sul calcio, zooma
+  // comunque: bloccare i touch nativi sui controlli (i pointer event arrivano lo stesso)
+  // e il pinch, che Safari espone come gesturestart.
+  const block = (e: Event) => e.preventDefault();
+  for (const el of [zone, kick]) {
+    el.addEventListener("touchstart", block, { passive: false });
+    el.addEventListener("touchend", block, { passive: false });
+  }
+  document.addEventListener("gesturestart", block);
+  document.addEventListener("dblclick", block);
 }
 
 export const isTouchDevice = () => matchMedia("(pointer: coarse)").matches;
