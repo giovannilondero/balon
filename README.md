@@ -23,6 +23,8 @@ se una stanza è piena, una persona che entra prende il posto di un bot. A tempo
 A fine partita il gioco si ferma e compare il riepilogo (marcatori, possesso, statistiche, MVP);
 l'host sceglie tra rivincita e riscaldamento. Se nessuno batte il calcio d'inizio entro 5 secondi, si gioca comunque.
 Se cadi (reload, app in background, rete) hai 20 secondi per rientrare al tuo posto.
+Dalla home si può installare come app (PWA): pulsante "Installa" dove il browser lo supporta
+(serve HTTPS o localhost), istruzioni da Condividi su iOS.
 
 Dietro un reverse proxy imposta `TRUST_PROXY=1`, così il server legge l'IP reale da `X-Forwarded-For`.
 
