@@ -17,6 +17,9 @@ const MAX_CONNECTIONS = 500;
 /** Due stanze piene dietro lo stesso router ci stanno; uno script che apre socket no. */
 const MAX_CONNECTIONS_PER_ADDRESS = 2 * MAX_PLAYERS;
 
+/** Cambiare nome crea un oggetto nuovo: è l'unico modo per spostarlo. */
+const MATCHES_OBJECT = "matches-weur";
+
 interface Env {
   readonly MATCHES: DurableObjectNamespace<Matches>;
 }
@@ -101,6 +104,8 @@ export class Matches extends DurableObject<Env> {
 export default {
   fetch: (request, env) => {
     if (new URL(request.url).pathname !== "/ws") return new Response("Not found", { status: 404 });
-    return env.MATCHES.getByName("matches").fetch(request);
+    // Un Durable Object nasce vicino alla prima richiesta e lì resta per sempre: il primo,
+    // "matches", è finito lontano dall'Europa. Questo nasce in Europa occidentale.
+    return env.MATCHES.getByName(MATCHES_OBJECT, { locationHint: "weur" }).fetch(request);
   },
 } satisfies ExportedHandler<Env>;
