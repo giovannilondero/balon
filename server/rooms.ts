@@ -7,8 +7,10 @@ import {
   TICK_RATE,
   type GameEvent,
   type GameState,
+  type Team,
 } from "../shared/game.ts";
 import type { RoomInfo, RoomKind, RoomSummary, Snapshot } from "../shared/protocol.ts";
+import { BotBrain, botName, type BotLevel } from "./bot.ts";
 
 // Niente lettere/cifre ambigue (0/O, 1/I/L).
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -16,7 +18,9 @@ const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 export class Room {
   readonly state: GameState = createState();
   hostId: string;
+  botLevel: BotLevel = "medium";
   private events: GameEvent[] = [];
+  private bots = new Map<string, BotBrain>();
 
   constructor(
     readonly code: string,
@@ -38,17 +42,57 @@ export class Room {
     return this.state.players.length >= MAX_PLAYERS;
   }
 
+  /** Giocatori umani (connessi o in attesa di riconnessione). */
+  get humans() {
+    return this.state.players.filter((p) => !this.bots.has(p.id)).length;
+  }
+
   add(id: string, name: string) {
+    // Se è piena di CPU, un bot lascia il posto a una persona.
+    if (this.full) {
+      const counts = this.botCounts();
+      if (counts.red + counts.blue > 0) this.removeBot(counts.red >= counts.blue ? "red" : "blue");
+    }
     addPlayer(this.state, id, name);
   }
 
-  /** Rimuove il giocatore; se era l'host passa il ruolo a qualcun altro. */
+  /** Rimuove il giocatore; se era l'host passa il ruolo a un'altra persona. */
   remove(id: string) {
     removePlayer(this.state, id);
     if (this.hostId === id) {
-      const next = this.state.players.find((p) => !p.away) ?? this.state.players[0];
+      const people = this.state.players.filter((p) => !this.bots.has(p.id));
+      const next = people.find((p) => !p.away) ?? people[0];
       if (next) this.hostId = next.id;
     }
+  }
+
+  addBot(team: Team) {
+    if (this.full) return;
+    const id = `cpu-${Math.random().toString(36).slice(2, 8)}`;
+    addPlayer(this.state, id, botName(team, this.botCounts()[team] + 1), team);
+    this.bots.set(id, new BotBrain(id, this.botLevel));
+  }
+
+  removeBot(team: Team) {
+    const bot = this.state.players.findLast((p) => p.team === team && this.bots.has(p.id));
+    if (!bot) return;
+    removePlayer(this.state, bot.id);
+    this.bots.delete(bot.id);
+  }
+
+  setBotLevel(level: BotLevel) {
+    this.botLevel = level;
+    for (const brain of this.bots.values()) brain.level = level;
+  }
+
+  botCounts(): Record<Team, number> {
+    const counts = { red: 0, blue: 0 };
+    for (const p of this.state.players) if (this.bots.has(p.id)) counts[p.team]++;
+    return counts;
+  }
+
+  isBot(id: string) {
+    return this.bots.has(id);
   }
 
   player(id: string) {
@@ -56,6 +100,10 @@ export class Room {
   }
 
   tick() {
+    for (const brain of this.bots.values()) {
+      const p = this.player(brain.id);
+      if (p) brain.update(this.state, p);
+    }
     step(this.state, this.events);
   }
 
@@ -70,13 +118,14 @@ export class Room {
       name: this.name,
       kind: this.kind,
       players: this.state.players.length,
+      cpu: this.bots.size,
       max: MAX_PLAYERS,
       match: this.state.match,
     };
   }
 
   info(): RoomInfo {
-    return { ...this.summary(), hostId: this.hostId, minutes: this.minutes };
+    return { ...this.summary(), hostId: this.hostId, minutes: this.minutes, bots: this.botCounts(), botLevel: this.botLevel };
   }
 
   snapshot(): Snapshot {
@@ -93,6 +142,7 @@ export class Room {
         y: round(p.y),
         k: p.input.kick,
         away: p.away,
+        bot: this.bots.has(p.id),
       })),
       score: [s.score.red, s.score.blue],
       match: s.match,

@@ -1,9 +1,10 @@
 import type { ServerWebSocket } from "bun";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { MATCH_MINUTES, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
-import type { ClientMessage, RoomKind, ServerMessage } from "../shared/protocol.ts";
+import { MATCH_MINUTES, MAX_PLAYERS, NO_INPUT, startMatch, switchTeam, TICK_RATE } from "../shared/game.ts";
+import type { BotLevel, ClientMessage, RoomKind, ServerMessage } from "../shared/protocol.ts";
 import { networkOf, type NetworkId } from "./network.ts";
+import { BOT_LEVELS } from "./bot.ts";
 import { newCode, Room } from "./rooms.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
@@ -66,7 +67,7 @@ const server = Bun.serve<SocketData>({
         case "list":
           return sendRooms(ws);
         case "create":
-          return create(ws, session, msg.name, msg.kind, msg.minutes);
+          return create(ws, session, msg.name, msg.kind, msg.minutes, msg.cpu);
         case "join":
           return joinByCode(ws, session, msg.name, String(msg.code ?? ""));
         case "leave":
@@ -88,6 +89,19 @@ const server = Bun.serve<SocketData>({
           if (msg.minutes && (MATCH_MINUTES as readonly number[]).includes(msg.minutes)) room.minutes = msg.minutes;
           startMatch(room.state, room.minutes);
           room.push({ type: "start", tick: room.state.tick + 1 });
+          return broadcastRoom(room);
+        }
+        case "bot": {
+          const room = session.room;
+          if (!room || room.hostId !== session.id || (msg.team !== "red" && msg.team !== "blue")) return;
+          if (msg.delta === 1) room.addBot(msg.team);
+          else room.removeBot(msg.team);
+          return broadcastRoom(room);
+        }
+        case "botLevel": {
+          const room = session.room;
+          if (!room || room.hostId !== session.id || !BOT_LEVELS.includes(msg.level)) return;
+          room.setBotLevel(msg.level);
           return broadcastRoom(room);
         }
       }
@@ -136,7 +150,7 @@ function hello(ws: Socket, token: string) {
   }
 }
 
-function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number) {
+function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number, cpu?: BotLevel) {
   const name = cleanName(rawName);
   const room = new Room(
     newCode((c) => rooms.has(c)),
@@ -149,6 +163,12 @@ function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, m
   rooms.set(room.code, room);
   console.log(`# ${room.code} creata (${room.kind}, rete ${room.networkKey})`);
   enter(ws, session, room, name);
+  if (cpu && BOT_LEVELS.includes(cpu)) {
+    room.setBotLevel(cpu);
+    const me = room.player(session.id);
+    room.addBot(me?.team === "red" ? "blue" : "red");
+    broadcastRoom(room);
+  }
 }
 
 function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: string) {
@@ -158,7 +178,7 @@ function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: stri
     return send(ws, { t: "error", message: "Questa partita è riservata alla rete locale di chi l'ha creata." });
   }
   if (session.room === room) return send(ws, { t: "joined", room: room.info() });
-  if (room.full) return send(ws, { t: "error", message: "La partita è piena." });
+  if (room.humans >= MAX_PLAYERS) return send(ws, { t: "error", message: "La partita è piena." });
   enter(ws, session, room, cleanName(rawName));
 }
 
@@ -179,7 +199,8 @@ function leave(session: Session) {
   session.ws?.unsubscribe(room.topic);
   room.remove(session.id);
   console.log(`- ${session.id} ← ${room.code} (${room.state.players.length})`);
-  if (room.state.players.length === 0) {
+  // Senza persone la stanza si chiude, anche se ci sono bot.
+  if (room.humans === 0) {
     rooms.delete(room.code);
     console.log(`# ${room.code} chiusa`);
   } else {

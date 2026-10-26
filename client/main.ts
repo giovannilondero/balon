@@ -60,7 +60,8 @@ net.onRoom = (room) => {
   if (!playing) controls.reset();
   if (room) {
     lobby.hide();
-    hud.show(room);
+    if ($("hud").hidden) hud.show(room);
+    else hud.setRoom(room);
     history.replaceState(null, "", `?p=${room.code}`);
   } else {
     hud.hide();

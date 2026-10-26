@@ -113,13 +113,14 @@ export function createState(): GameState {
   };
 }
 
-export function addPlayer(state: GameState, id: string, name: string): PlayerState {
+/** Senza squadra esplicita va in quella con meno giocatori. */
+export function addPlayer(state: GameState, id: string, name: string, team?: Team): PlayerState {
   const reds = state.players.filter((p) => p.team === "red").length;
   const blues = state.players.length - reds;
   const player: PlayerState = {
     id,
     name,
-    team: reds <= blues ? "red" : "blue",
+    team: team ?? (reds <= blues ? "red" : "blue"),
     x: 0,
     y: 0,
     vx: 0,

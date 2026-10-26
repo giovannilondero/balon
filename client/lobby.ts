@@ -1,7 +1,9 @@
 import { MATCH_MINUTES } from "../shared/game.ts";
-import type { RoomKind, RoomSummary } from "../shared/protocol.ts";
+import { BOT_LEVELS, type BotLevel, type RoomKind, type RoomSummary } from "../shared/protocol.ts";
 import type { NetClient } from "./net.ts";
 import { $, chips } from "./dom.ts";
+
+export const LEVEL_LABEL: Record<BotLevel, string> = { easy: "Facile", medium: "Medio", hard: "Difficile" };
 
 const KIND_HINT: Record<RoomKind, string> = {
   local: "Visibile e accessibile solo a chi è connesso alla tua stessa rete.",
@@ -11,6 +13,7 @@ const KIND_HINT: Record<RoomKind, string> = {
 export class Lobby {
   private kind: RoomKind = "local";
   private minutes = 3;
+  private cpuLevel: BotLevel = "medium";
   private poll: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -36,6 +39,12 @@ export class Lobby {
     $("create").addEventListener("click", () => {
       this.beforeJoin();
       net.send({ t: "create", name: this.name(), kind: this.kind, minutes: this.minutes });
+    });
+    chips($("cpu-level"), BOT_LEVELS, this.cpuLevel, (l) => LEVEL_LABEL[l], (l) => (this.cpuLevel = l));
+    $("vs-cpu").addEventListener("click", () => {
+      this.beforeJoin();
+      // Online = non compare nella lista della rete: è una partita solo tua.
+      net.send({ t: "create", name: this.name(), kind: "online", minutes: this.minutes, cpu: this.cpuLevel });
     });
     $("join-code").addEventListener("submit", (e) => {
       e.preventDefault();
@@ -85,9 +94,10 @@ export class Lobby {
         const meta = document.createElement("span");
         meta.className = "meta";
         const state = r.match === "running" ? "in corso" : r.match === "ended" ? "finita" : "in attesa";
-        meta.textContent = `${r.players}/${r.max} · ${state}`;
+        const cpu = r.cpu > 0 ? ` (${r.cpu} CPU)` : "";
+        meta.textContent = `${r.players}/${r.max}${cpu} · ${state}`;
         btn.append(name, meta);
-        btn.disabled = r.players >= r.max;
+        btn.disabled = r.players - r.cpu >= r.max; // i bot lasciano il posto
         btn.addEventListener("click", () => this.join(r.code));
         li.append(btn);
         return li;

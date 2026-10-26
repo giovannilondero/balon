@@ -48,6 +48,12 @@
           <button id="create" class="primary">Crea partita</button>
         </section>
 
+        <section>
+          <h2>Allenamento</h2>
+          <div class="chips" id="cpu-level"></div>
+          <button id="vs-cpu">Gioca contro la CPU</button>
+        </section>
+
         <form id="join-code">
           <input id="code" placeholder="Codice" maxlength="4" autocomplete="off" autocapitalize="characters" />
           <button type="submit">Entra</button>
@@ -85,6 +91,20 @@
       <div id="notice"></div>
 
       <div id="host-panel" hidden>
+        <div id="bot-controls">
+          <span class="label">CPU</span>
+          <div class="stepper red">
+            <button data-team="red" data-delta="-1" aria-label="Togli CPU ai Rossi">−</button>
+            <span id="bots-red">0</span>
+            <button data-team="red" data-delta="1" aria-label="Aggiungi CPU ai Rossi">+</button>
+          </div>
+          <div class="stepper blue">
+            <button data-team="blue" data-delta="-1" aria-label="Togli CPU ai Blu">−</button>
+            <span id="bots-blue">0</span>
+            <button data-team="blue" data-delta="1" aria-label="Aggiungi CPU ai Blu">+</button>
+          </div>
+          <div class="chips" id="bot-level"></div>
+        </div>
         <div class="chips" id="host-minutes"></div>
         <button id="start-btn" class="primary"></button>
       </div>
