@@ -39,20 +39,6 @@ Single build served by the game server:
 pnpm build && pnpm start   # http://localhost:3001
 ```
 
-## Deploying to Cloudflare
-
-In production the game runs on Cloudflare (`wrangler.jsonc`): the built client is served as static assets,
-and every match lives in a single Durable Object (`server/worker.ts`) running the same `Hub` as the Bun server.
-Nothing is stored, so a deploy ends the matches in progress.
-
-```sh
-pnpm serve:cloudflare   # the Worker and its Durable Object, locally: http://localhost:8787
-```
-
-CI (`.github/workflows/ci.yml`) checks every pull request and deploys every push to `main`. In the repository settings it needs
-the secrets `CLOUDFLARE_API_TOKEN` (an API token with the *Edit Cloudflare Workers* template) and `CLOUDFLARE_ACCOUNT_ID`,
-and the variable `DEPLOY_DOMAIN` (the custom domain, on a zone in that account). Without `DEPLOY_DOMAIN` nothing is deployed.
-
 ## Controls
 
 - **WASD / arrows**: move
