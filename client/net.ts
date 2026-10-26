@@ -1,5 +1,6 @@
 import { TICK_RATE, type GameEvent } from "../shared/game.ts";
 import type { ClientMessage, RoomInfo, RoomSummary, ServerMessage, Snapshot } from "../shared/protocol.ts";
+import { t } from "./i18n.ts";
 
 /** Ritardo di rendering rispetto all'ultimo stato ricevuto, in tick. */
 const INTERP_TICKS = 3;
@@ -87,7 +88,7 @@ export class NetClient {
         this.room = null;
         return this.onRoom(null);
       case "error":
-        return this.onError(msg.message);
+        return this.onError(t(`error.${msg.code}`));
       case "pong":
         this.ping = Math.round(performance.now() - msg.c);
         return;
@@ -104,7 +105,7 @@ export class NetClient {
       if (this.room === room && this.snaps.length === 0) {
         this.room = null;
         this.onRoom(null);
-        this.onError("Connessione persa: la partita non è più disponibile.");
+        this.onError(t("conn.roomGone"));
       }
     }, 1500);
     this.snaps = [];

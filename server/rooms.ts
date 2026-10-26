@@ -24,7 +24,7 @@ export class Room {
 
   constructor(
     readonly code: string,
-    readonly name: string,
+    readonly hostName: string,
     readonly kind: RoomKind,
     /** Rete di chi l'ha creata: per le partite locali è l'unica ammessa. */
     readonly networkKey: string,
@@ -118,7 +118,7 @@ export class Room {
   summary(): RoomSummary {
     return {
       code: this.code,
-      name: this.name,
+      host: this.hostName,
       kind: this.kind,
       players: this.state.players.length,
       cpu: this.bots.size,

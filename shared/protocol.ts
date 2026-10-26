@@ -26,7 +26,8 @@ export type ClientMessage =
 
 export interface RoomSummary {
   code: string;
-  name: string;
+  /** Nome di chi l'ha creata: il titolo della stanza lo compone il client, nella sua lingua. */
+  host: string;
   kind: RoomKind;
   players: number;
   /** Quanti dei giocatori sono bot. */
@@ -73,12 +74,15 @@ export interface Snapshot {
   events: GameEvent[];
 }
 
+/** Il server manda solo il codice: il testo lo traduce il client. */
+export type ErrorCode = "bad-token" | "name-required" | "room-not-found" | "room-local-only" | "room-full" | "team-switch-locked";
+
 export type ServerMessage =
   | { t: "welcome"; id: string }
   | { t: "rooms"; rooms: RoomSummary[]; network: "lan" | "internet" }
   | { t: "joined"; room: RoomInfo }
   | { t: "room"; room: RoomInfo }
   | { t: "left" }
-  | { t: "error"; message: string }
+  | { t: "error"; code: ErrorCode }
   | { t: "pong"; c: number }
   | Snapshot;

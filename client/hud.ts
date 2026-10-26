@@ -1,10 +1,10 @@
 import { canSwitchTeam, MATCH_MINUTES, type Team } from "../shared/game.ts";
 import { BOT_LEVELS, type RoomInfo } from "../shared/protocol.ts";
-import { LEVEL_LABEL } from "./lobby.ts";
+import { levelLabel, minutesLabel } from "./lobby.ts";
 import type { NetClient, RenderState } from "./net.ts";
 import { $, chips, toast } from "./dom.ts";
+import { t } from "./i18n.ts";
 
-const TEAM_NAME: Record<Team, string> = { red: "Rossi", blue: "Blu" };
 const TEAM_CSS: Record<Team, string> = { red: "#ff6b70", blue: "#6f9bff" };
 
 export class Hud {
@@ -17,8 +17,8 @@ export class Hud {
     private net: NetClient,
     onLeave: () => void,
   ) {
-    this.minuteChips = chips($("host-minutes"), MATCH_MINUTES, this.hostMinutes, (m) => `${m} min`, (m) => (this.hostMinutes = m));
-    this.levelChips = chips($("bot-level"), BOT_LEVELS, "medium", (l) => LEVEL_LABEL[l], (level) => net.send({ t: "botLevel", level }));
+    this.minuteChips = chips($("host-minutes"), MATCH_MINUTES, this.hostMinutes, minutesLabel, (m) => (this.hostMinutes = m));
+    this.levelChips = chips($("bot-level"), BOT_LEVELS, "medium", levelLabel, (level) => net.send({ t: "botLevel", level }));
     $("bot-controls").addEventListener("click", (e) => {
       const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-team]");
       if (!btn) return;
@@ -46,7 +46,7 @@ export class Hud {
     this.set("bots-blue", String(room.bots.blue));
     this.levelChips.set(room.botLevel);
     this.set("room-code", room.code);
-    this.set("room-kind", room.kind === "local" ? "Rete locale" : "Online");
+    this.set("room-kind", t(room.kind === "local" ? "hud.kind.local" : "hud.kind.online"));
   }
 
   update(state: RenderState, room: RoomInfo | null, meId: string | null) {
@@ -54,15 +54,15 @@ export class Hud {
     this.set("score-blue", String(state.score[1]));
 
     const clock = $("clock");
-    let clockText = "Riscaldamento";
-    if (state.match === "running") clockText = state.golden ? "Golden goal" : formatTime(state.time);
-    else if (state.match === "ended") clockText = "Finale";
+    let clockText = t("clock.warmup");
+    if (state.match === "running") clockText = state.golden ? t("clock.golden") : formatTime(state.time);
+    else if (state.match === "ended") clockText = t("clock.final");
     this.set("clock", clockText);
     clock.classList.toggle("golden", state.match === "running" && state.golden);
 
     $<HTMLButtonElement>("team-btn").disabled = meId === null || !canSwitchTeam(state.players, state.match, meId);
 
-    this.set("notice", state.phase === "kickoff" ? `Calcio d'inizio: ${TEAM_NAME[state.kickoffTeam]}` : "");
+    this.set("notice", state.phase === "kickoff" ? t("hud.kickoff", { team: t(`team.${state.kickoffTeam}`) }) : "");
     this.set("ping", this.net.ping === null ? "" : `${this.net.ping} ms`);
 
     const isHost = room !== null && room.hostId === meId;
@@ -70,22 +70,22 @@ export class Hud {
     const waiting = state.match === "warmup";
     $("host-panel").hidden = !(waiting && isHost);
     $("wait-host").hidden = !(waiting && !isHost);
-    this.set("start-btn", "Inizia partita");
+    this.set("start-btn", t("hud.start"));
     const host = state.players.find((p) => p.id === room?.hostId);
-    this.set("wait-host", `In attesa che ${host?.name ?? "l'host"} avvii la partita`);
+    this.set("wait-host", t("hud.waitHost", { name: host?.name ?? t("hud.host") }));
   }
 
   goal(team: Team, scorerName: string | null, ownGoal: boolean) {
-    const sub = scorerName ? (ownGoal ? `Autogol di ${scorerName}` : scorerName) : "";
-    this.banner("GOL!", sub, TEAM_CSS[team]);
+    const sub = scorerName ? (ownGoal ? t("banner.ownGoal", { name: scorerName }) : scorerName) : "";
+    this.banner(t("banner.goal"), sub, TEAM_CSS[team]);
   }
 
   start() {
-    this.banner("Si parte!", "", "#fff");
+    this.banner(t("banner.start"), "", "#fff");
   }
 
   golden() {
-    this.banner("Golden goal", "Chi segna vince", "#ffe066");
+    this.banner(t("banner.golden"), t("banner.golden.sub"), "#ffe066");
   }
 
   private banner(title: string, sub: string, color: string) {
@@ -104,10 +104,10 @@ export class Hud {
     const url = `${location.origin}${location.pathname}?p=${room.code}`;
     try {
       if (navigator.share && matchMedia("(pointer: coarse)").matches) {
-        await navigator.share({ title: "Balón", text: "Giochiamo a Balón!", url });
+        await navigator.share({ title: "Balón", text: t("share.text"), url });
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(url);
-        toast("Link copiato negli appunti", "info");
+        toast(t("share.copied"), "info");
       } else {
         // In http su LAN la clipboard API non c'è: mostriamo il link.
         toast(url, "info");

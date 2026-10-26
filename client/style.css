@@ -143,6 +143,8 @@ kbd {
 #join-code input { text-transform: uppercase; letter-spacing: 0.2em; }
 
 #conn { text-align: center; }
+#lang { justify-content: center; }
+#lang button { font-size: 13px; }
 
 /* ---------- HUD ---------- */
 

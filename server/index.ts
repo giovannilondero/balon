@@ -48,7 +48,7 @@ const server = Bun.serve<SocketData>({
       const file = Bun.file(join(DIST, path));
       return file.exists().then((ok) => new Response(ok ? file : Bun.file(join(DIST, "index.html"))));
     }
-    return new Response("Client non buildato: usa `pnpm dev` e apri la porta di Vite.", { status: 404 });
+    return new Response("Client not built: run `pnpm dev` and open the Vite port.", { status: 404 });
   },
   websocket: {
     message(ws: Socket, raw) {
@@ -82,7 +82,7 @@ const server = Bun.serve<SocketData>({
         }
         case "team":
           if (session.room && !switchTeam(session.room.state, session.id)) {
-            send(ws, { t: "error", message: "A partita iniziata puoi cambiare squadra solo se l'altra ha almeno 2 giocatori in meno." });
+            send(ws, { t: "error", code: "team-switch-locked" });
           }
           return;
         case "start": {
@@ -132,12 +132,12 @@ const server = Bun.serve<SocketData>({
 });
 
 function hello(ws: Socket, token: string) {
-  if (token.length < 16 || token.length > 64) return send(ws, { t: "error", message: "Token non valido" });
+  if (token.length < 16 || token.length > 64) return send(ws, { t: "error", code: "bad-token" });
   let session = sessions.get(token);
   if (session) {
     if (session.graceTimer) clearTimeout(session.graceTimer);
     session.graceTimer = null;
-    if (session.ws && session.ws !== ws) session.ws.close(4000, "Sessione aperta altrove");
+    if (session.ws && session.ws !== ws) session.ws.close(4000, "Session opened elsewhere");
   } else {
     session = { id: crypto.randomUUID().slice(0, 8), token, ws: null, room: null, graceTimer: null };
     sessions.set(token, session);
@@ -160,10 +160,10 @@ function hello(ws: Socket, token: string) {
 
 function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, minutes: number, cpu?: BotLevel) {
   const name = cleanName(rawName);
-  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
+  if (!name) return send(ws, { t: "error", code: "name-required" });
   const room = new Room(
     newCode((c) => rooms.has(c)),
-    `Partita di ${name}`,
+    name,
     kind === "online" ? "online" : "local",
     ws.data.network.key,
     (MATCH_MINUTES as readonly number[]).includes(minutes) ? minutes : 3,
@@ -182,14 +182,14 @@ function create(ws: Socket, session: Session, rawName: string, kind: RoomKind, m
 
 function joinByCode(ws: Socket, session: Session, rawName: string, rawCode: string) {
   const room = rooms.get(rawCode.trim().toUpperCase());
-  if (!room) return send(ws, { t: "error", message: "Partita non trovata. Controlla il codice." });
+  if (!room) return send(ws, { t: "error", code: "room-not-found" });
   if (room.kind === "local" && room.networkKey !== ws.data.network.key) {
-    return send(ws, { t: "error", message: "Questa partita è riservata alla rete locale di chi l'ha creata." });
+    return send(ws, { t: "error", code: "room-local-only" });
   }
   if (session.room === room) return send(ws, { t: "joined", room: room.info() });
-  if (room.humans >= MAX_PLAYERS) return send(ws, { t: "error", message: "La partita è piena." });
+  if (room.humans >= MAX_PLAYERS) return send(ws, { t: "error", code: "room-full" });
   const name = cleanName(rawName);
-  if (!name) return send(ws, { t: "error", message: NAME_REQUIRED });
+  if (!name) return send(ws, { t: "error", code: "name-required" });
   enter(ws, session, room, name);
 }
 
@@ -234,8 +234,6 @@ function broadcastRoom(room: Room) {
 function send(ws: Socket, msg: ServerMessage) {
   ws.send(JSON.stringify(msg));
 }
-
-const NAME_REQUIRED = "Scrivi il tuo nome per entrare in partita.";
 
 function cleanName(raw: unknown) {
   return String(raw ?? "").trim().slice(0, 16);
