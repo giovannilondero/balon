@@ -81,7 +81,9 @@ const server = Bun.serve<SocketData>({
           return;
         }
         case "team":
-          if (session.room) switchTeam(session.room.state, session.id);
+          if (session.room && !switchTeam(session.room.state, session.id)) {
+            send(ws, { t: "error", message: "A partita iniziata puoi cambiare squadra solo se l'altra ha almeno 2 giocatori in meno." });
+          }
           return;
         case "start": {
           const room = session.room;

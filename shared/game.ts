@@ -200,11 +200,29 @@ export function removePlayer(state: GameState, id: string) {
   state.players = state.players.filter((p) => p.id !== id);
 }
 
+/**
+ * In riscaldamento si cambia liberamente. A partita iniziata solo per riequilibrare:
+ * la tua squadra deve avere almeno 2 giocatori in più dell'altra (chi è offline non conta).
+ */
+export function canSwitchTeam(
+  players: readonly Pick<PlayerState, "id" | "team" | "away">[],
+  match: GameState["match"],
+  id: string,
+) {
+  const me = players.find((p) => p.id === id);
+  if (!me) return false;
+  if (match === "warmup") return true;
+  const count = (team: Team) => players.filter((p) => p.team === team && !p.away).length;
+  return count(me.team) - count(me.team === "red" ? "blue" : "red") >= 2;
+}
+
+/** Restituisce false se il cambio non è consentito. */
 export function switchTeam(state: GameState, id: string) {
   const p = state.players.find((p) => p.id === id);
-  if (!p) return;
+  if (!p || !canSwitchTeam(state.players, state.match, id)) return false;
   p.team = p.team === "red" ? "blue" : "red";
   placePlayer(state, p);
+  return true;
 }
 
 export function startMatch(state: GameState, minutes: number) {

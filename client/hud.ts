@@ -1,4 +1,4 @@
-import { MATCH_MINUTES, type Team } from "../shared/game.ts";
+import { canSwitchTeam, MATCH_MINUTES, type Team } from "../shared/game.ts";
 import { BOT_LEVELS, type RoomInfo } from "../shared/protocol.ts";
 import { LEVEL_LABEL } from "./lobby.ts";
 import type { NetClient, RenderState } from "./net.ts";
@@ -59,6 +59,8 @@ export class Hud {
     else if (state.match === "ended") clockText = "Finale";
     this.set("clock", clockText);
     clock.classList.toggle("golden", state.match === "running" && state.golden);
+
+    $<HTMLButtonElement>("team-btn").disabled = meId === null || !canSwitchTeam(state.players, state.match, meId);
 
     this.set("notice", state.phase === "kickoff" ? `Calcio d'inizio: ${TEAM_NAME[state.kickoffTeam]}` : "");
     this.set("ping", this.net.ping === null ? "" : `${this.net.ping} ms`);
