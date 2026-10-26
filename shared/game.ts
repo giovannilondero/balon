@@ -12,6 +12,7 @@ export const FIELD = {
   goalDepth: 55,
   margin: 70,
   postR: 7,
+  centerR: 90,
 } as const;
 
 export const BALL = { r: 11, invMass: 1, damping: 0.99, bounce: 0.5 } as const;
@@ -27,17 +28,21 @@ export const PLAYER = {
   kickReach: 5,
 } as const;
 
+export const MAX_PLAYERS = 10;
+export const MATCH_MINUTES = [2, 3, 5, 10] as const;
+
 const GOAL_PAUSE_TICKS = TICK_RATE * 2.5;
 
 export type Team = "red" | "blue";
 
-export const InputBit = {
-  up: 1,
-  down: 2,
-  left: 4,
-  right: 8,
-  kick: 16,
-} as const;
+/** Input analogico: mx, my interi in [-100, 100]. La tastiera usa gli estremi. */
+export interface Input {
+  mx: number;
+  my: number;
+  kick: boolean;
+}
+
+export const NO_INPUT: Input = { mx: 0, my: 0, kick: false };
 
 export interface Disc {
   x: number;
@@ -50,23 +55,39 @@ export interface PlayerState extends Disc {
   id: string;
   name: string;
   team: Team;
-  input: number;
+  input: Input;
   prevKick: boolean;
   kickArmed: boolean;
+  /** Disconnesso ma con il posto tenuto per la riconnessione. */
+  away: boolean;
 }
 
 export type GameEvent =
   | { type: "kick"; tick: number; id: string; x: number; y: number }
-  | { type: "goal"; tick: number; team: Team }
-  | { type: "post"; tick: number; x: number; y: number };
+  | { type: "goal"; tick: number; team: Team; scorer: string | null }
+  | { type: "post"; tick: number; x: number; y: number }
+  | { type: "start"; tick: number }
+  | { type: "golden"; tick: number }
+  | { type: "end"; tick: number; winner: Team | null };
 
+/**
+ * match: warmup = palleggio libero, running = partita col timer, ended = risultato.
+ * ball:  kickoff = attesa del calcio d'inizio, play = gioco, goal = pausa dopo un gol.
+ */
 export interface GameState {
   tick: number;
   ball: Disc;
   players: PlayerState[];
   score: Record<Team, number>;
-  phase: "play" | "goal";
+  match: "warmup" | "running" | "ended";
+  phase: "kickoff" | "play" | "goal";
   phaseTimer: number;
+  kickoffTeam: Team;
+  /** Tick rimanenti di partita. */
+  timeLeft: number;
+  golden: boolean;
+  /** Ultimo giocatore che ha toccato la palla, per attribuire i gol. */
+  lastTouch: string | null;
 }
 
 const POSTS: { x: number; y: number }[] = [
@@ -82,8 +103,13 @@ export function createState(): GameState {
     ball: { x: 0, y: 0, vx: 0, vy: 0 },
     players: [],
     score: { red: 0, blue: 0 },
+    match: "warmup",
     phase: "play",
     phaseTimer: 0,
+    kickoffTeam: "red",
+    timeLeft: 0,
+    golden: false,
+    lastTouch: null,
   };
 }
 
@@ -98,9 +124,10 @@ export function addPlayer(state: GameState, id: string, name: string): PlayerSta
     y: 0,
     vx: 0,
     vy: 0,
-    input: 0,
+    input: NO_INPUT,
     prevKick: false,
     kickArmed: false,
+    away: false,
   };
   state.players.push(player);
   placePlayer(state, player);
@@ -118,6 +145,20 @@ export function switchTeam(state: GameState, id: string) {
   placePlayer(state, p);
 }
 
+export function startMatch(state: GameState, minutes: number) {
+  state.score = { red: 0, blue: 0 };
+  state.match = "running";
+  state.timeLeft = Math.round(minutes * 60 * TICK_RATE);
+  state.golden = false;
+  state.kickoffTeam = Math.random() < 0.5 ? "red" : "blue";
+  resetPositions(state);
+}
+
+/** Il calcio d'inizio vale solo in partita e con entrambe le squadre in campo. */
+function kickoffRules(state: GameState) {
+  return state.match === "running" && state.players.some((p) => p.team === "red") && state.players.some((p) => p.team === "blue");
+}
+
 /** Rosso difende a sinistra (x < 0), blu a destra. */
 function placePlayer(state: GameState, player: PlayerState) {
   const mates = state.players.filter((p) => p.team === player.team);
@@ -131,7 +172,9 @@ function placePlayer(state: GameState, player: PlayerState) {
 
 export function resetPositions(state: GameState) {
   state.ball = { x: 0, y: 0, vx: 0, vy: 0 };
+  state.lastTouch = null;
   for (const p of state.players) placePlayer(state, p);
+  state.phase = kickoffRules(state) ? "kickoff" : "play";
 }
 
 export function step(state: GameState, events: GameEvent[]) {
@@ -139,19 +182,17 @@ export function step(state: GameState, events: GameEvent[]) {
   const { ball } = state;
 
   for (const p of state.players) {
-    let dx = 0;
-    let dy = 0;
-    if (p.input & InputBit.up) dy -= 1;
-    if (p.input & InputBit.down) dy += 1;
-    if (p.input & InputBit.left) dx -= 1;
-    if (p.input & InputBit.right) dx += 1;
+    let dx = p.input.mx / 100;
+    let dy = p.input.my / 100;
     const len = Math.hypot(dx, dy);
-    const kick = (p.input & InputBit.kick) !== 0;
-    if (len > 0) {
-      const a = kick ? PLAYER.kickingAccel : PLAYER.accel;
-      p.vx += (dx / len) * a;
-      p.vy += (dy / len) * a;
+    if (len > 1) {
+      dx /= len;
+      dy /= len;
     }
+    const kick = p.input.kick;
+    const a = kick ? PLAYER.kickingAccel : PLAYER.accel;
+    p.vx += dx * a;
+    p.vy += dy * a;
 
     // Il calcio parte alla pressione e resta "carico" finché tieni premuto,
     // così puoi premere prima di arrivare sulla palla. Un calcio per pressione.
@@ -167,6 +208,7 @@ export function step(state: GameState, events: GameEvent[]) {
         ball.vx += (kx / d) * PLAYER.kickStrength * BALL.invMass;
         ball.vy += (ky / d) * PLAYER.kickStrength * BALL.invMass;
         p.kickArmed = false;
+        state.lastTouch = p.id;
         events.push({ type: "kick", tick: state.tick, id: p.id, x: ball.x, y: ball.y });
       }
     }
@@ -176,7 +218,7 @@ export function step(state: GameState, events: GameEvent[]) {
   for (const p of state.players) integrate(p, PLAYER.damping);
 
   for (const p of state.players) {
-    collide(p, PLAYER.r, PLAYER.invMass, ball, BALL.r, BALL.invMass, PLAYER.bounce);
+    if (collide(p, PLAYER.r, PLAYER.invMass, ball, BALL.r, BALL.invMass, PLAYER.bounce)) state.lastTouch = p.id;
   }
   for (let i = 0; i < state.players.length; i++) {
     for (let j = i + 1; j < state.players.length; j++) {
@@ -187,8 +229,7 @@ export function step(state: GameState, events: GameEvent[]) {
   }
   for (const post of POSTS) {
     const speed = Math.hypot(ball.vx, ball.vy);
-    const postDisc = { ...post, vx: 0, vy: 0 };
-    if (collide(postDisc, FIELD.postR, 0, ball, BALL.r, BALL.invMass, BALL.bounce) && speed > 1.5) {
+    if (collide({ ...post, vx: 0, vy: 0 }, FIELD.postR, 0, ball, BALL.r, BALL.invMass, BALL.bounce) && speed > 1.5) {
       events.push({ type: "post", tick: state.tick, x: post.x, y: post.y });
     }
     for (const p of state.players) {
@@ -197,21 +238,46 @@ export function step(state: GameState, events: GameEvent[]) {
   }
 
   constrainBall(ball);
-  for (const p of state.players) constrainPlayer(p);
+  for (const p of state.players) {
+    constrainPlayer(p);
+    if (state.phase === "kickoff") constrainKickoff(p, p.team === state.kickoffTeam);
+  }
 
-  if (state.phase === "play") {
+  if (state.phase === "kickoff") {
+    if (ball.vx !== 0 || ball.vy !== 0) state.phase = "play";
+    else if (!kickoffRules(state)) state.phase = "play";
+  } else if (state.phase === "play") {
+    if (state.match === "running" && !state.golden && --state.timeLeft <= 0) {
+      state.timeLeft = 0;
+      if (state.score.red === state.score.blue) {
+        state.golden = true;
+        events.push({ type: "golden", tick: state.tick });
+      } else {
+        endMatch(state, events);
+      }
+    }
     const line = FIELD.w / 2 + BALL.r;
     if (Math.abs(ball.x) > line) {
       const team: Team = ball.x > 0 ? "red" : "blue";
-      state.score[team]++;
+      events.push({ type: "goal", tick: state.tick, team, scorer: state.lastTouch });
       state.phase = "goal";
       state.phaseTimer = GOAL_PAUSE_TICKS;
-      events.push({ type: "goal", tick: state.tick, team });
+      if (state.match === "running") {
+        state.score[team]++;
+        state.kickoffTeam = team === "red" ? "blue" : "red";
+        if (state.golden) endMatch(state, events);
+      }
     }
   } else if (--state.phaseTimer <= 0) {
-    state.phase = "play";
     resetPositions(state);
   }
+}
+
+function endMatch(state: GameState, events: GameEvent[]) {
+  const { red, blue } = state.score;
+  state.match = "ended";
+  state.golden = false;
+  events.push({ type: "end", tick: state.tick, winner: red === blue ? null : red > blue ? "red" : "blue" });
 }
 
 function integrate(d: Disc, damping: number) {
@@ -305,5 +371,33 @@ function constrainPlayer(p: Disc) {
   if (Math.abs(p.y) > limY) {
     p.y = Math.sign(p.y) * limY;
     p.vy = 0;
+  }
+}
+
+/**
+ * Durante il calcio d'inizio ognuno resta nella propria metà; chi non batte
+ * resta anche fuori dal cerchio di centrocampo.
+ */
+function constrainKickoff(p: PlayerState, kicking: boolean) {
+  const side = p.team === "red" ? -1 : 1;
+  const limit = kicking ? 0 : PLAYER.r;
+  if (p.x * side < limit) {
+    p.x = side * limit;
+    if (p.vx * side < 0) p.vx = 0;
+  }
+  if (!kicking) {
+    const d = Math.hypot(p.x, p.y);
+    const min = FIELD.centerR + PLAYER.r;
+    if (d < min) {
+      const nx = d > 0 ? p.x / d : side;
+      const ny = d > 0 ? p.y / d : 0;
+      p.x = nx * min;
+      p.y = ny * min;
+      const vn = p.vx * nx + p.vy * ny;
+      if (vn < 0) {
+        p.vx -= vn * nx;
+        p.vy -= vn * ny;
+      }
+    }
   }
 }

@@ -18,6 +18,7 @@ interface PlayerView {
   kickRing: THREE.Mesh<THREE.TorusGeometry, THREE.MeshStandardMaterial>;
   team: Team;
   name: string;
+  away: boolean;
 }
 
 interface Effect {
@@ -256,12 +257,13 @@ export class GameScene {
 
   private updatePlayers(list: SnapshotPlayer[], meId: string | null) {
     const seen = new Set<string>();
+    this.meMarker.visible = false;
     for (const p of list) {
       seen.add(p.id);
       let view = this.players.get(p.id);
-      if (!view || view.team !== p.team || view.name !== p.name) {
-        if (view) this.scene.remove(view.group);
-        view = makePlayer(p.team, p.name);
+      if (!view || view.team !== p.team || view.name !== p.name || view.away !== p.away) {
+        if (view) removeObject(this.scene, view.group);
+        view = makePlayer(p.team, p.name, p.away);
         this.players.set(p.id, view);
         this.scene.add(view.group);
       }
@@ -278,7 +280,7 @@ export class GameScene {
     }
     for (const [id, view] of this.players) {
       if (!seen.has(id)) {
-        this.scene.remove(view.group);
+        removeObject(this.scene, view.group);
         this.players.delete(id);
       }
     }
@@ -329,14 +331,28 @@ export class GameScene {
   }
 }
 
-function makePlayer(team: Team, name: string): PlayerView {
+function removeObject(scene: THREE.Scene, obj: THREE.Object3D) {
+  scene.remove(obj);
+  obj.traverse((o) => {
+    if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
+      o.geometry.dispose();
+      const mat = o.material as THREE.Material & { map?: THREE.Texture | null };
+      mat.map?.dispose();
+      mat.dispose();
+    }
+  });
+}
+
+/** away = disconnesso in attesa di riconnessione: disco semitrasparente. */
+function makePlayer(team: Team, name: string, away: boolean): PlayerView {
   const group = new THREE.Group();
   const color = new THREE.Color(TEAM_COLORS[team]);
   const height = 12;
+  const fade = away ? { transparent: true, opacity: 0.35 } : {};
 
   const body = new THREE.Mesh(
     new THREE.CylinderGeometry(PLAYER.r, PLAYER.r, height, 48),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.1 }),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.35, metalness: 0.1, ...fade }),
   );
   body.position.y = height / 2;
   body.castShadow = true;
@@ -344,7 +360,7 @@ function makePlayer(team: Team, name: string): PlayerView {
 
   const cap = new THREE.Mesh(
     new THREE.CircleGeometry(PLAYER.r * 0.68, 48),
-    new THREE.MeshStandardMaterial({ color: color.clone().lerp(new THREE.Color(0xffffff), 0.35), roughness: 0.4 }),
+    new THREE.MeshStandardMaterial({ color: color.clone().lerp(new THREE.Color(0xffffff), 0.35), roughness: 0.4, ...fade }),
   );
   cap.rotation.x = -Math.PI / 2;
   cap.position.y = height + 0.05;
@@ -358,11 +374,13 @@ function makePlayer(team: Team, name: string): PlayerView {
   kickRing.position.y = height;
   group.add(kickRing);
 
-  const label = makeLabel(name);
+  kickRing.visible = !away;
+
+  const label = makeLabel(away ? `${name} (offline)` : name);
   label.position.y = 52;
   group.add(label);
 
-  return { group, kickRing, team, name };
+  return { group, kickRing, team, name, away };
 }
 
 function makeLabel(text: string) {
