@@ -1,4 +1,5 @@
 import { $ } from "./dom.ts";
+import { t } from "./i18n.ts";
 
 /** Evento non standard di Chrome/Edge/Samsung: permette di aprire il prompt d'installazione quando vogliamo noi. */
 type InstallPromptEvent = Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
@@ -21,7 +22,7 @@ export function setupInstall() {
   let deferred: InstallPromptEvent | null = null;
 
   if (ios) {
-    $("install-hint").textContent = "Tocca Condividi e poi «Aggiungi alla schermata Home».";
+    $("install-hint").textContent = t("home.install.ios");
     button.hidden = true;
     section.hidden = false;
   }

@@ -2,13 +2,11 @@ import { MATCH_MINUTES } from "../shared/game.ts";
 import { BOT_LEVELS, type BotLevel, type RoomKind, type RoomSummary } from "../shared/protocol.ts";
 import type { NetClient } from "./net.ts";
 import { $, chips, toast } from "./dom.ts";
+import { lang, LANG_NAME, LANGS, setLang, t } from "./i18n.ts";
 
-export const LEVEL_LABEL: Record<BotLevel, string> = { easy: "Facile", medium: "Medio", hard: "Difficile" };
-
-const KIND_HINT: Record<RoomKind, string> = {
-  local: "Visibile e accessibile solo a chi è connesso alla tua stessa rete.",
-  online: "Chiunque abbia il codice o il link può entrare.",
-};
+export const levelLabel = (level: BotLevel) => t(`level.${level}`);
+export const minutesLabel = (n: number) => t("minutes", { n });
+const kindHint = (kind: RoomKind) => t(`home.kind.${kind}.hint`);
 
 export class Lobby {
   private kind: RoomKind = "local";
@@ -33,11 +31,11 @@ export class Lobby {
       if (!btn) return;
       this.kind = btn.dataset.value as RoomKind;
       for (const b of kind.querySelectorAll("button")) b.classList.toggle("on", b === btn);
-      $("kind-hint").textContent = KIND_HINT[this.kind];
+      $("kind-hint").textContent = kindHint(this.kind);
     });
-    $("kind-hint").textContent = KIND_HINT[this.kind];
+    $("kind-hint").textContent = kindHint(this.kind);
 
-    chips($("minutes"), MATCH_MINUTES, this.minutes, (m) => `${m} min`, (m) => (this.minutes = m));
+    chips($("minutes"), MATCH_MINUTES, this.minutes, minutesLabel, (m) => (this.minutes = m));
 
     $("create").addEventListener("click", () => {
       const name = this.name();
@@ -45,7 +43,8 @@ export class Lobby {
       this.beforeJoin();
       net.send({ t: "create", name, kind: this.kind, minutes: this.minutes });
     });
-    chips($("cpu-level"), BOT_LEVELS, this.cpuLevel, (l) => LEVEL_LABEL[l], (l) => (this.cpuLevel = l));
+    chips($("cpu-level"), BOT_LEVELS, this.cpuLevel, levelLabel, (l) => (this.cpuLevel = l));
+    chips($("lang"), LANGS, lang, (l) => LANG_NAME[l], setLang);
     $("vs-cpu").addEventListener("click", () => {
       const name = this.name();
       if (!name) return;
@@ -74,7 +73,7 @@ export class Lobby {
     if (!name) {
       input.classList.add("missing");
       input.focus();
-      toast("Scrivi il tuo nome per entrare in partita.");
+      toast(t("home.name.required"));
       return null;
     }
     localStorage.setItem("balon:name", name);
@@ -107,11 +106,11 @@ export class Lobby {
         const li = document.createElement("li");
         const btn = document.createElement("button");
         const name = document.createElement("span");
-        name.textContent = r.name;
+        name.textContent = t("room.of", { name: r.host });
         const meta = document.createElement("span");
         meta.className = "meta";
-        const state = r.match === "running" ? "in corso" : r.match === "ended" ? "finita" : "in attesa";
-        const cpu = r.cpu > 0 ? ` (${r.cpu} CPU)` : "";
+        const state = t(r.match === "running" ? "room.running" : r.match === "ended" ? "room.ended" : "room.waiting");
+        const cpu = r.cpu > 0 ? t("room.cpu", { n: r.cpu }) : "";
         meta.textContent = `${r.players}/${r.max}${cpu} · ${state}`;
         btn.append(name, meta);
         btn.disabled = r.players - r.cpu >= r.max; // i bot lasciano il posto

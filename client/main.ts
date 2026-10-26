@@ -7,6 +7,7 @@ import { Hud } from "./hud.ts";
 import { SummaryView } from "./summary.ts";
 import { setupInstall } from "./install.ts";
 import { $, toast } from "./dom.ts";
+import { t, translatePage } from "./i18n.ts";
 import { playGoal, playKick, playPost, playWhistle, unlockAudio } from "./audio.ts";
 
 const IDLE: RenderState = {
@@ -19,6 +20,8 @@ const IDLE: RenderState = {
   time: 0,
   golden: false,
 };
+
+translatePage();
 
 const touch = isTouchDevice();
 document.body.classList.toggle("touch", touch);
@@ -52,9 +55,9 @@ lobby.show();
 setupInstall();
 
 net.onStatus = (s) => {
-  lobby.setConnection(s === "online" ? "" : s === "connecting" ? "Connessione al server…" : "Server non raggiungibile, riprovo…");
+  lobby.setConnection(s === "online" ? "" : t(s === "connecting" ? "conn.connecting" : "conn.offline"));
   if (s === "online" && !net.room) net.send({ t: "list" });
-  if (s === "offline" && net.room) toast("Connessione persa, mi riconnetto…");
+  if (s === "offline" && net.room) toast(t("conn.lost"));
 };
 net.onRooms = (rooms) => lobby.renderRooms(rooms);
 net.onError = (message) => toast(message);

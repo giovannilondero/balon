@@ -2,8 +2,8 @@ import type { Team } from "../shared/game.ts";
 import type { MatchReport, RoomInfo } from "../shared/protocol.ts";
 import type { NetClient } from "./net.ts";
 import { $ } from "./dom.ts";
+import { t } from "./i18n.ts";
 
-const TEAM_NAME: Record<Team, string> = { red: "Rossi", blue: "Blu" };
 const TEAM_CSS: Record<Team, string> = { red: "#ff6b70", blue: "#6f9bff" };
 
 /** Schermata di fine partita: risultato, marcatori, possesso e statistiche. */
@@ -39,9 +39,9 @@ export class SummaryView {
 
   private render(report: MatchReport, room: RoomInfo, meId: string | null) {
     const { winner } = report;
-    $("sum-eyebrow").textContent = report.golden ? "Decisa al golden goal" : `Fine partita · ${formatTime(report.duration)}`;
+    $("sum-eyebrow").textContent = report.golden ? t("sum.golden") : t("sum.end", { time: formatTime(report.duration) });
     const title = $("sum-title");
-    title.textContent = winner ? `Vincono i ${TEAM_NAME[winner]}!` : "Pareggio";
+    title.textContent = winner ? t(`sum.win.${winner}`) : t("sum.draw");
     title.style.color = winner ? TEAM_CSS[winner] : "#fff";
     $("sum-red").textContent = String(report.score[0]);
     $("sum-blue").textContent = String(report.score[1]);
@@ -64,7 +64,7 @@ export class SummaryView {
           const li = document.createElement("li");
           const count = row.times.length > 1 ? ` ×${row.times.length}` : "";
           li.append(span("scorer", `${row.name}${count}`));
-          if (row.own) li.append(span("own", " (autogol)"));
+          if (row.own) li.append(span("own", t("sum.ownGoal")));
           li.append(span("time", row.times.map(formatTime).join(", ")));
           return li;
         }),
@@ -72,7 +72,7 @@ export class SummaryView {
     }
 
     // Prima i vincitori, poi per gol, tiri e tocchi.
-    const order = (t: Team) => (t === (winner ?? "red") ? 0 : 1);
+    const order = (team: Team) => (team === (winner ?? "red") ? 0 : 1);
     const players = [...report.players].sort(
       (a, b) => order(a.team) - order(b.team) || b.goals - a.goals || b.kicks - a.kicks || b.touches - a.touches,
     );
@@ -82,10 +82,10 @@ export class SummaryView {
         if (p.id === meId) tr.className = "me";
         const name = document.createElement("td");
         name.append(span(`dot ${p.team}`, ""), p.name);
-        if (p.id === meId) name.append(span("tag", "tu"));
+        if (p.id === meId) name.append(span("tag", t("sum.you")));
         else if (p.bot) name.append(span("tag", "CPU"));
         if (p.id === report.mvpId) name.append(span("mvp", "MVP"));
-        const goals = p.ownGoals ? `${p.goals} (${p.ownGoals} aut.)` : String(p.goals);
+        const goals = p.ownGoals ? t("sum.ownGoals", { goals: p.goals, n: p.ownGoals }) : String(p.goals);
         tr.append(name, cell(goals), cell(String(p.kicks)), cell(String(p.touches)));
         return tr;
       }),
@@ -96,7 +96,7 @@ export class SummaryView {
     $("sum-warmup").hidden = !isHost;
     const host = report.players.find((p) => p.id === room.hostId);
     $("sum-wait").hidden = isHost;
-    $("sum-wait").textContent = `In attesa che ${host?.name ?? "l'host"} scelga se fare la rivincita`;
+    $("sum-wait").textContent = t("sum.wait", { name: host?.name ?? t("hud.host") });
   }
 }
 

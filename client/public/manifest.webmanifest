@@ -1,8 +1,8 @@
 {
   "name": "Balón",
   "short_name": "Balón",
-  "description": "Calcio a dischi multiplayer nel browser",
-  "lang": "it",
+  "description": "Multiplayer disc football in the browser",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
