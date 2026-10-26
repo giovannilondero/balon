@@ -5,6 +5,7 @@ import { isTouchDevice, setupTouch } from "./touch.ts";
 import { Lobby } from "./lobby.ts";
 import { Hud } from "./hud.ts";
 import { SummaryView } from "./summary.ts";
+import { setupInstall } from "./install.ts";
 import { $, toast } from "./dom.ts";
 import { playGoal, playKick, playPost, playWhistle, unlockAudio } from "./audio.ts";
 
@@ -48,6 +49,7 @@ let endedAt: number | null = null;
 const SUMMARY_DELAY_MS = 1300;
 
 lobby.show();
+setupInstall();
 
 net.onStatus = (s) => {
   lobby.setConnection(s === "online" ? "" : s === "connecting" ? "Connessione al server…" : "Server non raggiungibile, riprovo…");
