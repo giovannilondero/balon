@@ -38,7 +38,7 @@ pnpm build && pnpm start   # http://localhost:3001
 
 - **WASD / frecce**: muovi
 - **Spazio / X**: calcia (tienilo premuto e il calcio parte al contatto)
-- **T**: cambia squadra
+- **T**: cambia squadra (a partita iniziata solo se la tua ha almeno 2 giocatori in più dell'altra, senza contare chi è offline)
 - **Mobile**: stick a sinistra (appare dove appoggi il pollice), pulsante CALCIA a destra
 
 ## Struttura

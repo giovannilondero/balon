@@ -38,6 +38,7 @@ button {
 }
 button:hover { background: rgb(255 255 255 / 0.16); }
 button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: default; transform: none; background: rgb(255 255 255 / 0.1); }
 button.primary { background: var(--accent); color: #1a1a1a; font-weight: 700; }
 button.primary:hover { background: #ffe88a; }
 
