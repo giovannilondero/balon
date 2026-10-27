@@ -116,7 +116,7 @@ function frame(now: number) {
   // Se rientri in una partita già finita endedAt è null: riepilogo subito.
   const showSummary = net.room !== null && state.match === "ended" && (endedAt === null || now - endedAt > SUMMARY_DELAY_MS);
   summary.update(showSummary, net.room, net.id);
-  $("touch").hidden = !(net.room && touch && !showSummary);
+  $("touch").hidden = !(net.room && touch && state.match === "running" && !showSummary);
   scene.update(state, net.id, dt);
   requestAnimationFrame(frame);
 }
